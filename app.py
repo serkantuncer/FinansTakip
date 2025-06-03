@@ -70,14 +70,15 @@ def get_writable_db_path():
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "finanstakip2025_default_secret_key")
 
-# Veritabanı yolunu al
-db_path = get_writable_db_path()
-print("Veritabanı yolu:", db_path)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+# Database configuration - use PostgreSQL from environment
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+# Import and initialize database from models
+from models import db, User, Yatirim, FiyatGecmisi
+from werkzeug.security import generate_password_hash
+
+db.init_app(app)
 migrate = Migrate(app, db)
 
 # Flask-Login setup
@@ -87,10 +88,8 @@ login_manager.login_view = 'auth.login'
 login_manager.login_message = 'Bu sayfaya erişmek için giriş yapmanız gerekiyor.'
 login_manager.login_message_category = 'info'
 
-# Import models and blueprints after db initialization
-from models import User, Yatirim, FiyatGecmisi
+# Import and register auth blueprint
 from auth import auth_bp
-
 app.register_blueprint(auth_bp)
 
 @login_manager.user_loader

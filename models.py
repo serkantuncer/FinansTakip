@@ -1,8 +1,10 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from app import db
 from datetime import datetime
 from decimal import Decimal
+
+# Initialize db here to avoid circular imports
+db = SQLAlchemy()
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
