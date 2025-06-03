@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Yatırımlar - Yatırım Takip{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>
+                    <i class="fas fa-chart-line me-2"></i>
+                    Yatırımlarım
+                </h1>
+                <div>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#yatirimEkleModal">
+                        <i class="fas fa-plus me-2"></i>Yeni Yatırım
+                    </button>
+                    <form method="POST" action="{{ url_for('toplu_fiyat_guncelle') }}" class="d-inline">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-sync me-2"></i>Fiyatları Güncelle
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">Arama</label>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   value="{{ search }}" placeholder="Kod, isim veya nota göre ara...">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="tip" class="form-label">Tip</label>
+                            <select class="form-select" id="tip" name="tip">
+                                <option value="">Tümü</option>
+                                <option value="fon" {% if tip_filter == 'fon' %}selected{% endif %}>Fon</option>
+                                <option value="hisse" {% if tip_filter == 'hisse' %}selected{% endif %}>Hisse</option>
+                                <option value="altin" {% if tip_filter == 'altin' %}selected{% endif %}>Altın</option>
+                                <option value="doviz" {% if tip_filter == 'doviz' %}selected{% endif %}>Döviz</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="kategori" class="form-label">Kategori</label>
+                            <select class="form-select" id="kategori" name="kategori">
+                                <option value="">Tümü</option>
+                                {% for kategori in kategoriler %}
+                                <option value="{{ kategori }}" {% if kategori_filter == kategori %}selected{% endif %}>
+                                    {{ kategori }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-2"></i>Filtrele
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Investments Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body p-0">
+                    {% if yatirimlar %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Tip</th>
+                                    <th>Kod</th>
+                                    <th>İsim</th>
+                                    <th>Alış Tarihi</th>
+                                    <th>Alış Fiyatı</th>
+                                    <th>Miktar</th>
+                                    <th>Alış Tutarı</th>
+                                    <th>Güncel Fiyat</th>
+                                    <th>Güncel Tutar</th>
+                                    <th>Kar/Zarar</th>
+                                    <th>Getiri %</th>
+                                    <th>Kategori</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for yatirim in yatirimlar %}
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ yatirim.tip|title }}</span>
+                                    </td>
+                                    <td><strong>{{ yatirim.kod }}</strong></td>
+                                    <td>
+                                        <span class="text-truncate" data-bs-toggle="tooltip" title="{{ yatirim.isim or 'İsim yok' }}">
+                                            {{ yatirim.isim[:30] + '...' if yatirim.isim and yatirim.isim|length > 30 else yatirim.isim or '-' }}
+                                        </span>
+                                    </td>
+                                    <td>{{ yatirim.alis_tarihi.strftime('%d.%m.%Y') }}</td>
+                                    <td>₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</td>
+                                    <td>{{ "{:,.2f}".format(yatirim.miktar) }}</td>
+                                    <td>₺{{ "{:,.2f}".format(yatirim.alis_fiyati * yatirim.miktar) }}</td>
+                                    <td>
+                                        {% if yatirim.guncel_fiyat %}
+                                            ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
+                                            {% if yatirim.son_guncelleme %}
+                                                <br><small class="text-muted">{{ yatirim.son_guncelleme.strftime('%d.%m %H:%M') }}</small>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if yatirim.guncel_fiyat %}
+                                            ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if yatirim.guncel_fiyat %}
+                                            {% set kar_zarar = (yatirim.guncel_fiyat - yatirim.alis_fiyati) * yatirim.miktar %}
+                                            <span class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ₺{{ "{:+,.2f}".format(kar_zarar) }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if yatirim.guncel_fiyat %}
+                                            {% set getiri = (yatirim.guncel_fiyat / yatirim.alis_fiyati - 1) * 100 %}
+                                            <span class="{% if getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ "{:+.2f}".format(getiri) }}%
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if yatirim.kategori %}
+                                            <span class="badge bg-info">{{ yatirim.kategori }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=yatirim.id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-success" data-bs-toggle="tooltip" title="Fiyat Güncelle">
+                                                    <i class="fas fa-sync"></i>
+                                                </button>
+                                            </form>
+                                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" 
+                                                    data-bs-target="#duzenleModal{{ yatirim.id }}" title="Düzenle">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" 
+                                                    data-bs-target="#silModal{{ yatirim.id }}" title="Sil">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-chart-line fa-4x text-muted mb-4"></i>
+                        <h4 class="text-muted">Henüz yatırım eklenmemiş</h4>
+                        <p class="text-muted mb-4">İlk yatırımınızı ekleyerek başlayın!</p>
+                        <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#yatirimEkleModal">
+                            <i class="fas fa-plus me-2"></i>İlk Yatırımı Ekle
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Investment Modal -->
+<div class="modal fade" id="yatirimEkleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus me-2"></i>Yeni Yatırım Ekle
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('yatirim_ekle') }}">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tip" class="form-label">Yatırım Tipi *</label>
+                            <select class="form-select" id="tip" name="tip" required>
+                                <option value="">Seçiniz</option>
+                                <option value="fon">Fon</option>
+                                <option value="hisse">Hisse</option>
+                                <option value="altin">Altın</option>
+                                <option value="doviz">Döviz</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="kod" class="form-label">Kod *</label>
+                            <input type="text" class="form-control" id="kod" name="kod" required
+                                   placeholder="örn: AKFON, THYAO, GA, USD">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="alis_tarihi" class="form-label">Alış Tarihi *</label>
+                            <input type="date" class="form-control" id="alis_tarihi" name="alis_tarihi" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="alis_fiyati" class="form-label">Alış Fiyatı (₺) *</label>
+                            <input type="number" class="form-control" id="alis_fiyati" name="alis_fiyati" 
+                                   step="0.000001" min="0" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="miktar" class="form-label">Miktar *</label>
+                            <input type="number" class="form-control" id="miktar" name="miktar" 
+                                   step="0.000001" min="0.000001" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="kategori" class="form-label">Kategori</label>
+                            <input type="text" class="form-control" id="kategori" name="kategori"
+                                   placeholder="örn: Emeklilik, Acil Durum">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notlar" class="form-label">Notlar</label>
+                        <textarea class="form-control" id="notlar" name="notlar" rows="3"
+                                  placeholder="İsteğe bağlı notlarınız..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Kaydet
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modals -->
+{% for yatirim in yatirimlar %}
+<div class="modal fade" id="duzenleModal{{ yatirim.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Yatırım Düzenle: {{ yatirim.kod }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('yatirim_duzenle', yatirim_id=yatirim.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Alış Fiyatı (₺)</label>
+                        <input type="number" class="form-control" name="alis_fiyati" 
+                               step="0.000001" value="{{ yatirim.alis_fiyati }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Miktar</label>
+                        <input type="number" class="form-control" name="miktar" 
+                               step="0.000001" value="{{ yatirim.miktar }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Kategori</label>
+                        <input type="text" class="form-control" name="kategori" value="{{ yatirim.kategori or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notlar</label>
+                        <textarea class="form-control" name="notlar" rows="3">{{ yatirim.notlar or '' }}</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Güncelle
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="silModal{{ yatirim.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Yatırım Sil
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>{{ yatirim.kod }}</strong> kodlu yatırımı silmek istediğinizden emin misiniz?</p>
+                <p class="text-muted small">Bu işlem geri alınamaz ve tüm fiyat geçmişi de silinecektir.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <form method="POST" action="{{ url_for('yatirim_sil', yatirim_id=yatirim.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Sil
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default date to today
+    document.getElementById('alis_tarihi').value = new Date().toISOString().split('T')[0];
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock %}
