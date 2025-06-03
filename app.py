@@ -69,6 +69,9 @@ def get_writable_db_path():
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "finanstakip2025_default_secret_key")
+app.config['SESSION_COOKIE_SECURE'] = False  # Allow cookies over HTTP for development
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Database configuration - use PostgreSQL from environment
 database_url = os.environ.get("DATABASE_URL")
@@ -107,7 +110,10 @@ app.register_blueprint(auth_bp)
 @login_manager.user_loader
 def load_user(user_id):
     try:
-        return User.query.get(int(user_id))
+        print(f"Loading user with ID: {user_id}")
+        user = User.query.get(int(user_id))
+        print(f"User loaded: {user.username if user else None}")
+        return user
     except Exception as e:
         print(f"User loading error: {e}")
         return None
