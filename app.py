@@ -106,7 +106,11 @@ app.register_blueprint(auth_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    try:
+        return User.query.get(int(user_id))
+    except Exception as e:
+        print(f"User loading error: {e}")
+        return None
 
 def init_database():
     """Veritabanını başlatır - tabloları oluşturur."""

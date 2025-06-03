@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from urllib.parse import urlparse
 from models import User
 from app import db
 
@@ -16,14 +17,26 @@ def login():
         password = request.form['password']
         remember = bool(request.form.get('remember'))
         
+        print(f"Login attempt for user: {username}")
         user = User.query.filter_by(username=username).first()
+        print(f"User found: {user is not None}")
         
         if user and check_password_hash(user.password_hash, password):
+            print(f"Password check passed for user: {username}")
             login_user(user, remember=remember)
+            print(f"User logged in, is_authenticated: {user.is_authenticated}")
+            
             next_page = request.args.get('next')
-            flash(f'Hoş geldiniz, {user.username}!', 'success')
-            return redirect(next_page) if next_page else redirect(url_for('index'))
+            if next_page and urlparse(next_page).netloc == '':
+                print(f"Redirecting to next page: {next_page}")
+                flash(f'Hoş geldiniz, {user.username}!', 'success')
+                return redirect(next_page)
+            else:
+                print("Redirecting to index page")
+                flash(f'Hoş geldiniz, {user.username}!', 'success')
+                return redirect(url_for('index'))
         else:
+            print(f"Authentication failed for user: {username}")
             flash('Geçersiz kullanıcı adı veya şifre!', 'danger')
     
     return render_template('login.html')
