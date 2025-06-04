@@ -441,6 +441,7 @@ function updateCodePlaceholder() {
         kodOrnekleri.style.display = 'none';
         validateBtn.style.display = 'none';
         kodInput.disabled = true;
+        kodInput.setAttribute('disabled', 'disabled');
     }
     
     // Clear previous results
@@ -449,6 +450,23 @@ function updateCodePlaceholder() {
     kodInput.value = '';
     document.getElementById('alis_fiyati').value = '';
 }
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('alis_tarihi');
+    if (dateInput && !dateInput.value) {
+        dateInput.value = today;
+    }
+    
+    // Initialize code input as disabled
+    const kodInput = document.getElementById('kod');
+    if (kodInput) {
+        kodInput.disabled = true;
+        kodInput.setAttribute('disabled', 'disabled');
+    }
+});
 
 function searchCodes(query) {
     const tip = document.getElementById('tip').value;
@@ -581,10 +599,6 @@ document.addEventListener('click', function(event) {
     }
 });
 
-// Set today's date as default
-document.addEventListener('DOMContentLoaded', function() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('alis_tarihi').value = today;
-});
+
 </script>
 {% endblock %}
