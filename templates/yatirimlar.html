@@ -405,10 +405,13 @@ const investmentCodes = {
 };
 
 function updateCodePlaceholder() {
+    console.log('updateCodePlaceholder called'); // Debug log
     const tip = document.getElementById('tip').value;
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
+    
+    console.log('Selected tip:', tip); // Debug log
     
     const ornekler = {
         'fon': {
@@ -430,25 +433,37 @@ function updateCodePlaceholder() {
     };
     
     if (tip && ornekler[tip]) {
+        console.log('Enabling code input for:', tip); // Debug log
         kodInput.placeholder = ornekler[tip].placeholder;
         kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
         kodOrnekleri.style.display = 'block';
-        validateBtn.style.display = 'block';
+        if (validateBtn) validateBtn.style.display = 'block';
+        
+        // Multiple ways to enable the input
         kodInput.disabled = false;
         kodInput.removeAttribute('disabled');
+        kodInput.removeAttribute('readonly');
+        kodInput.readOnly = false;
+        
+        console.log('Code input enabled, disabled status:', kodInput.disabled); // Debug log
     } else {
+        console.log('Disabling code input'); // Debug log
         kodInput.placeholder = 'Önce yatırım tipi seçin...';
         kodOrnekleri.style.display = 'none';
-        validateBtn.style.display = 'none';
+        if (validateBtn) validateBtn.style.display = 'none';
         kodInput.disabled = true;
         kodInput.setAttribute('disabled', 'disabled');
     }
     
     // Clear previous results
-    document.getElementById('kodSonuc').style.display = 'none';
-    document.getElementById('searchResults').style.display = 'none';
+    const kodSonuc = document.getElementById('kodSonuc');
+    const searchResults = document.getElementById('searchResults');
+    const alisFiyati = document.getElementById('alis_fiyati');
+    
+    if (kodSonuc) kodSonuc.style.display = 'none';
+    if (searchResults) searchResults.style.display = 'none';
     kodInput.value = '';
-    document.getElementById('alis_fiyati').value = '';
+    if (alisFiyati) alisFiyati.value = '';
 }
 
 // Initialize on page load
