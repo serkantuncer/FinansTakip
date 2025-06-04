@@ -75,19 +75,19 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="card bg-light">
-                                    <div class="card-body text-center">
+                                    <div class="card-body text-center text-dark">
                                         <i class="fas fa-calendar-alt fa-2x text-primary mb-2"></i>
-                                        <h6>Üyelik Tarihi</h6>
-                                        <p>{{ current_user.created_at.strftime('%d.%m.%Y') }}</p>
+                                        <h6 class="text-dark">Üyelik Tarihi</h6>
+                                        <p class="text-dark">{{ current_user.created_at.strftime('%d.%m.%Y') }}</p>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="card bg-light">
-                                    <div class="card-body text-center">
+                                    <div class="card-body text-center text-dark">
                                         <i class="fas fa-chart-line fa-2x text-success mb-2"></i>
-                                        <h6>Toplam Yatırım</h6>
-                                        <p>{{ current_user.yatirimlar|length }} Adet</p>
+                                        <h6 class="text-dark">Toplam Yatırım</h6>
+                                        <p class="text-dark">{{ current_user.yatirimlar|length }} Adet</p>
                                     </div>
                                 </div>
                             </div>
