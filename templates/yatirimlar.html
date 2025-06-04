@@ -125,6 +125,9 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        <span class="text-muted">-</span>
+                                    </td>
+                                    <td>
                                         {% if yatirim.guncel_fiyat %}
                                             ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
                                         {% else %}

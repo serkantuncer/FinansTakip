@@ -3,7 +3,7 @@ import os
 import sys
 import shutil
 import logging
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -1077,6 +1077,123 @@ def my_follows():
         .order_by(PortfoyTakip.created_at.desc()).all()
     
     return render_template('my_follows.html', takip_edilenler=takip_edilenler)
+
+@app.route('/export_portfolio_pdf')
+@login_required
+def export_portfolio_pdf():
+    """Portföy özetini PDF olarak indir"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from io import BytesIO
+    
+    # Get user's investments
+    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
+    
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
+    
+    # Prepare styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30,
+        alignment=1  # Center alignment
+    )
+    
+    # Build PDF content
+    story = []
+    
+    # Title
+    title = Paragraph(f"{current_user.username} - Yatırım Portföyü Raporu", title_style)
+    story.append(title)
+    
+    # Date
+    date_str = Paragraph(f"Rapor Tarihi: {datetime.now().strftime('%d.%m.%Y %H:%M')}", styles['Normal'])
+    story.append(date_str)
+    story.append(Spacer(1, 20))
+    
+    if yatirimlar:
+        # Table data
+        data = [['Tip', 'Kod', 'İsim', 'Alış Fiyatı', 'Miktar', 'Güncel Fiyat', 'Satış Fiyatı', 'Kar/Zarar']]
+        
+        toplam_yatirim = 0
+        toplam_guncel = 0
+        
+        for yatirim in yatirimlar:
+            alis_tutari = yatirim.alis_fiyati * yatirim.miktar
+            toplam_yatirim += alis_tutari
+            
+            if yatirim.guncel_fiyat:
+                guncel_tutar = yatirim.guncel_fiyat * yatirim.miktar
+                toplam_guncel += guncel_tutar
+                kar_zarar = guncel_tutar - alis_tutari
+                kar_zarar_str = f"₺{kar_zarar:+,.2f}"
+                guncel_fiyat_str = f"₺{yatirim.guncel_fiyat:,.2f}"
+            else:
+                kar_zarar_str = "-"
+                guncel_fiyat_str = "-"
+                toplam_guncel += alis_tutari
+            
+            data.append([
+                yatirim.tip.title(),
+                yatirim.kod,
+                (yatirim.isim[:25] + '...' if yatirim.isim and len(yatirim.isim) > 25 else yatirim.isim or '-'),
+                f"₺{yatirim.alis_fiyati:,.2f}",
+                f"{yatirim.miktar:,.2f}",
+                guncel_fiyat_str,
+                "₺-",  # Placeholder for selling price - will be updated when API provides selling prices
+                kar_zarar_str
+            ])
+        
+        # Add totals
+        toplam_kar_zarar = toplam_guncel - toplam_yatirim
+        data.append(['', '', 'TOPLAM', f"₺{toplam_yatirim:,.2f}", '', f"₺{toplam_guncel:,.2f}", '', f"₺{toplam_kar_zarar:+,.2f}"])
+        
+        # Create table
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(table)
+        
+        # Summary
+        story.append(Spacer(1, 30))
+        getiri_orani = ((toplam_guncel - toplam_yatirim) / toplam_yatirim * 100) if toplam_yatirim > 0 else 0
+        summary = Paragraph(f"<b>Portföy Özeti:</b><br/>Toplam Yatırım: ₺{toplam_yatirim:,.2f}<br/>Güncel Değer: ₺{toplam_guncel:,.2f}<br/>Toplam Getiri: %{getiri_orani:+.2f}", styles['Normal'])
+        story.append(summary)
+    else:
+        no_data = Paragraph("Henüz yatırım kaydı bulunmamaktadır.", styles['Normal'])
+        story.append(no_data)
+    
+    # Build PDF
+    doc.build(story)
+    
+    # Prepare response
+    buffer.seek(0)
+    filename = f"portfoy_raporu_{current_user.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/pdf'
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
