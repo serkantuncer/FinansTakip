@@ -574,6 +574,15 @@ function updateFormBasedOnType(selectedType) {
     kodInput.disabled = false;
     kodInput.removeAttribute('disabled');
     
+    // Clear previous code when type changes
+    kodInput.value = '';
+    
+    // Hide search results and validation results
+    const searchResults = document.getElementById('searchResults');
+    const kodSonuc = document.getElementById('kodSonuc');
+    if (searchResults) searchResults.style.display = 'none';
+    if (kodSonuc) kodSonuc.style.display = 'none';
+    
     // Set placeholders and examples based on type
     const typeConfig = {
         'fon': {
@@ -607,10 +616,17 @@ function updateFormBasedOnType(selectedType) {
     
     // Re-add event handlers to the now-enabled input
     kodInput.oninput = function() {
+        console.log('Code input changed:', this.value);
         searchCodes(this.value);
     };
     kodInput.onblur = function() {
+        console.log('Code input lost focus, validating...');
         validateCode();
+    };
+    
+    // Also add keyup event for better responsiveness
+    kodInput.onkeyup = function() {
+        searchCodes(this.value);
     };
     
     console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
