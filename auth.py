@@ -91,3 +91,47 @@ def logout():
     logout_user()
     flash('Başarıyla çıkış yaptınız.', 'info')
     return redirect(url_for('auth.login'))
+
+@auth_bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'change_password':
+            current_password = request.form['current_password']
+            new_password = request.form['new_password']
+            confirm_password = request.form['confirm_password']
+            
+            if not check_password_hash(current_user.password_hash, current_password):
+                flash('Mevcut şifreniz yanlış!', 'danger')
+            elif new_password != confirm_password:
+                flash('Yeni şifreler eşleşmiyor!', 'danger')
+            elif len(new_password) < 6:
+                flash('Yeni şifre en az 6 karakter olmalıdır!', 'danger')
+            else:
+                current_user.password_hash = generate_password_hash(new_password)
+                db.session.commit()
+                flash('Şifreniz başarıyla güncellendi!', 'success')
+                return redirect(url_for('auth.profile'))
+        
+        elif action == 'update_info':
+            username = request.form['username']
+            email = request.form['email']
+            
+            # Check if username or email already exists (for other users)
+            existing_user = User.query.filter(
+                (User.username == username) | (User.email == email),
+                User.id != current_user.id
+            ).first()
+            
+            if existing_user:
+                flash('Bu kullanıcı adı veya e-posta adresi zaten kullanılıyor!', 'danger')
+            else:
+                current_user.username = username
+                current_user.email = email
+                db.session.commit()
+                flash('Bilgileriniz başarıyla güncellendi!', 'success')
+                return redirect(url_for('auth.profile'))
+    
+    return render_template('profile.html')

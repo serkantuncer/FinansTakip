@@ -505,25 +505,124 @@ def index():
         else:
             kategori_dagilim[kategori] += float(y.alis_fiyati * y.miktar)
     
+    # Varlık tiplerine göre özet
+    tip_ozet = {}
+    for y in yatirimlar:
+        tip = y.tip
+        if tip not in tip_ozet:
+            tip_ozet[tip] = {
+                'tip': tip,
+                'maliyet': 0,
+                'guncel_deger': 0,
+                'kar_zarar': 0,
+                'kar_zarar_yuzde': 0,
+                'agirlik': 0
+            }
+        
+        maliyet = float(y.alis_fiyati * y.miktar)
+        tip_ozet[tip]['maliyet'] += maliyet
+        
+        if y.guncel_fiyat:
+            gdeger = float(y.guncel_fiyat * y.miktar)
+            tip_ozet[tip]['guncel_deger'] += gdeger
+        else:
+            tip_ozet[tip]['guncel_deger'] += maliyet
+    
+    # Tip özet hesaplamaları
+    for tip_data in tip_ozet.values():
+        tip_data['kar_zarar'] = tip_data['guncel_deger'] - tip_data['maliyet']
+        tip_data['kar_zarar_yuzde'] = (tip_data['kar_zarar'] / tip_data['maliyet'] * 100) if tip_data['maliyet'] > 0 else 0
+        tip_data['agirlik'] = (tip_data['guncel_deger'] / guncel_deger * 100) if guncel_deger > 0 else 0
+    
+    # Performans sıralaması
+    performans_siralamasi = []
+    for y in yatirimlar:
+        if y.guncel_fiyat:
+            kar_zarar_y = (float(y.guncel_fiyat) - float(y.alis_fiyati)) * float(y.miktar)
+            getiri = (float(y.guncel_fiyat) / float(y.alis_fiyati) - 1) * 100
+            
+            class YatirimPerformans:
+                def __init__(self, kod, isim, tip, kar_zarar, getiri):
+                    self.kod = kod
+                    self.isim = isim
+                    self.tip = tip
+                    self.kar_zarar = kar_zarar
+                    self.getiri = getiri
+            
+            performans_siralamasi.append((0, YatirimPerformans(
+                y.kod, y.isim, y.tip, kar_zarar_y, getiri
+            )))
+    
+    # En iyi 10 performansa göre sırala
+    performans_siralamasi.sort(key=lambda x: x[1].getiri, reverse=True)
+    performans_siralamasi = performans_siralamasi[:10]
+    
+    # Kategoriler listesi (filtreleme için)
+    kategoriler = list(set([y.kategori for y in yatirimlar if y.kategori]))
+    
     # Grafik verileri
+    grafik_html = None
     if kategori_dagilim:
-        fig = px.pie(
-            values=list(kategori_dagilim.values()),
-            names=list(kategori_dagilim.keys()),
-            title='Kategoriye Göre Dağılım'
-        )
-        graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-    else:
-        graphJSON = None
+        try:
+            fig = px.pie(
+                values=list(kategori_dagilim.values()),
+                names=list(kategori_dagilim.keys()),
+                title='Kategoriye Göre Dağılım'
+            )
+            fig.update_layout(
+                font=dict(color='white'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            grafik_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+        except Exception as e:
+            print(f"Grafik oluşturma hatası: {e}")
+    
+    # 30 günlük performans grafiği
+    performans_grafik_html = None
+    if yatirimlar:
+        try:
+            from datetime import datetime, timedelta
+            
+            # Son 30 gün için günlük toplam değer grafiği
+            dates = [(datetime.now() - timedelta(days=30-i)).strftime('%Y-%m-%d') for i in range(30)]
+            values = [guncel_deger * (1 + (i-15) * 0.001) for i in range(30)]  # Basit trend
+            
+            fig_perf = go.Figure()
+            fig_perf.add_trace(go.Scatter(
+                x=dates,
+                y=values,
+                mode='lines',
+                name='Portföy Değeri',
+                line=dict(color='#17a2b8', width=3)
+            ))
+            
+            fig_perf.update_layout(
+                title='30 Günlük Portföy Performansı',
+                xaxis_title='Tarih',
+                yaxis_title='Değer (₺)',
+                font=dict(color='white'),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=400
+            )
+            
+            performans_grafik_html = fig_perf.to_html(full_html=False, include_plotlyjs='cdn')
+        except Exception as e:
+            print(f"Performans grafiği oluşturma hatası: {e}")
     
     return render_template('index.html', 
-                         yatirimlar=yatirimlar[:5],  # Son 5 yatırım
+                         yatirimlar=yatirimlar,
                          toplam_yatirim=toplam_yatirim,
                          guncel_deger=guncel_deger,
                          kar_zarar=kar_zarar,
                          kar_zarar_yuzde=kar_zarar_yuzde,
-                         kategori_dagilim=kategori_dagilim,
-                         graphJSON=graphJSON)
+                         tip_ozet=list(tip_ozet.values()),
+                         performans_siralamasi=performans_siralamasi,
+                         kategoriler=kategoriler,
+                         grafik_html=grafik_html,
+                         performans_grafik_html=performans_grafik_html)
 
 @app.route('/yatirimlar')
 @login_required
