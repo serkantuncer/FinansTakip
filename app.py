@@ -193,9 +193,10 @@ def tefas_fon_verisi_cek(fon_kodu):
         else:
             fon_adi = soup.title.string if soup.title else f"{fon_kodu_upper} Fonu"
             # Eğer başlıkta "bulunamadı" benzeri bir ifade varsa, sayfa hata vermiş olabilir
-            if "bulunamadı" in fon_adi.lower():
+            if fon_adi and "bulunamadı" in fon_adi.lower():
                 app.logger.warning(f"TEFAŞ sayfasında {fon_kodu_upper} için kayıt bulunamadı görünüyor (başlıktan tespit).")
-                return None
+                # Continue with default handling for now
+                pass
         
         # FİYAT İÇİN OLASI SEÇİCİLER
         # 1. Önceki seçici ile fiyat 
@@ -264,6 +265,39 @@ def tefas_fon_verisi_cek(fon_kodu):
         return None
     except Exception as e:
         app.logger.error(f"TEFAŞ veri çekme (Genel) hatası ({fon_kodu_upper}): {str(e)}", exc_info=True)
+        # Try alternative TEFAS search as fallback
+        return tefas_alternatif_arama(fon_kodu_upper)
+
+def tefas_alternatif_arama(fon_kodu):
+    """TEFAŞ alternatif API kullanarak fon arama"""
+    try:
+        # TEFAS public API endpoint
+        api_url = f"https://www.tefas.gov.tr/api/DB/BindHistoryInfo?fontip=YAT&sfontur=&kurucukod=&fonkod={fon_kodu}&bastarih=&bittarih="
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+            'Referer': 'https://www.tefas.gov.tr/'
+        }
+        
+        app.logger.info(f"TEFAŞ Alternatif API deneniyor: {fon_kodu}")
+        response = requests.get(api_url, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                latest_data = data[0]  # En son veri
+                return {
+                    'isim': latest_data.get('FONUNVAN', f"{fon_kodu} Fonu"),
+                    'guncel_fiyat': Decimal(str(latest_data.get('FIYAT', 0))),
+                    'tarih': datetime.now()
+                }
+        
+        app.logger.warning(f"TEFAŞ alternatif API'den {fon_kodu} bulunamadı")
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"TEFAŞ alternatif API hatası: {str(e)}")
         return None
 
 def bist_hisse_verisi_cek(hisse_kodu):
@@ -1081,119 +1115,272 @@ def my_follows():
 @app.route('/export_portfolio_pdf')
 @login_required
 def export_portfolio_pdf():
-    """Portföy özetini PDF olarak indir"""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-    from reportlab.lib.units import inch
-    from io import BytesIO
-    
-    # Get user's investments
-    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
-    
-    # Create PDF in memory
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch)
-    
-    # Prepare styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        spaceAfter=30,
-        alignment=1  # Center alignment
-    )
-    
-    # Build PDF content
-    story = []
-    
-    # Title
-    title = Paragraph(f"{current_user.username} - Yatırım Portföyü Raporu", title_style)
-    story.append(title)
-    
-    # Date
-    date_str = Paragraph(f"Rapor Tarihi: {datetime.now().strftime('%d.%m.%Y %H:%M')}", styles['Normal'])
-    story.append(date_str)
-    story.append(Spacer(1, 20))
-    
-    if yatirimlar:
-        # Table data
-        data = [['Tip', 'Kod', 'İsim', 'Alış Fiyatı', 'Miktar', 'Güncel Fiyat', 'Satış Fiyatı', 'Kar/Zarar']]
+    """Portföy özetini PDF olarak indir - Türkçe karakter desteği ile"""
+    try:
+        import weasyprint
+        from flask import make_response
+        import html
         
+        # Get user's investments
+        yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
+        
+        # Calculate totals
         toplam_yatirim = 0
         toplam_guncel = 0
         
         for yatirim in yatirimlar:
-            alis_tutari = yatirim.alis_fiyati * yatirim.miktar
+            alis_tutari = float(yatirim.alis_fiyati * yatirim.miktar)
             toplam_yatirim += alis_tutari
             
             if yatirim.guncel_fiyat:
-                guncel_tutar = yatirim.guncel_fiyat * yatirim.miktar
+                guncel_tutar = float(yatirim.guncel_fiyat * yatirim.miktar)
                 toplam_guncel += guncel_tutar
-                kar_zarar = guncel_tutar - alis_tutari
-                kar_zarar_str = f"₺{kar_zarar:+,.2f}"
-                guncel_fiyat_str = f"₺{yatirim.guncel_fiyat:,.2f}"
             else:
-                kar_zarar_str = "-"
-                guncel_fiyat_str = "-"
                 toplam_guncel += alis_tutari
-            
-            data.append([
-                yatirim.tip.title(),
-                yatirim.kod,
-                (yatirim.isim[:25] + '...' if yatirim.isim and len(yatirim.isim) > 25 else yatirim.isim or '-'),
-                f"₺{yatirim.alis_fiyati:,.2f}",
-                f"{yatirim.miktar:,.2f}",
-                guncel_fiyat_str,
-                "₺-",  # Placeholder for selling price - will be updated when API provides selling prices
-                kar_zarar_str
-            ])
         
-        # Add totals
         toplam_kar_zarar = toplam_guncel - toplam_yatirim
-        data.append(['', '', 'TOPLAM', f"₺{toplam_yatirim:,.2f}", '', f"₺{toplam_guncel:,.2f}", '', f"₺{toplam_kar_zarar:+,.2f}"])
-        
-        # Create table
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        
-        story.append(table)
-        
-        # Summary
-        story.append(Spacer(1, 30))
         getiri_orani = ((toplam_guncel - toplam_yatirim) / toplam_yatirim * 100) if toplam_yatirim > 0 else 0
-        summary = Paragraph(f"<b>Portföy Özeti:</b><br/>Toplam Yatırım: ₺{toplam_yatirim:,.2f}<br/>Güncel Değer: ₺{toplam_guncel:,.2f}<br/>Toplam Getiri: %{getiri_orani:+.2f}", styles['Normal'])
-        story.append(summary)
-    else:
-        no_data = Paragraph("Henüz yatırım kaydı bulunmamaktadır.", styles['Normal'])
-        story.append(no_data)
-    
-    # Build PDF
-    doc.build(story)
-    
-    # Prepare response
-    buffer.seek(0)
-    filename = f"portfoy_raporu_{current_user.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-    
-    return send_file(
-        buffer,
-        as_attachment=True,
-        download_name=filename,
-        mimetype='application/pdf'
-    )
+        
+        # Create HTML content with proper Turkish character encoding
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+            <meta charset="UTF-8">
+            <title>Portföy Raporu</title>
+            <style>
+                @page {{
+                    size: A4;
+                    margin: 2cm;
+                }}
+                body {{
+                    font-family: Arial, sans-serif;
+                    font-size: 12px;
+                    line-height: 1.4;
+                    color: #333;
+                }}
+                .header {{
+                    text-align: center;
+                    margin-bottom: 30px;
+                    border-bottom: 2px solid #007bff;
+                    padding-bottom: 15px;
+                }}
+                .header h1 {{
+                    color: #007bff;
+                    margin-bottom: 5px;
+                    font-size: 24px;
+                }}
+                .header p {{
+                    color: #666;
+                    margin: 5px 0;
+                }}
+                .summary {{
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                    border-left: 4px solid #007bff;
+                }}
+                .summary h3 {{
+                    color: #007bff;
+                    margin-top: 0;
+                }}
+                .summary-grid {{
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 15px;
+                }}
+                .summary-item {{
+                    display: flex;
+                    justify-content: space-between;
+                    padding: 8px 0;
+                    border-bottom: 1px solid #dee2e6;
+                }}
+                .summary-item:last-child {{
+                    border-bottom: none;
+                    font-weight: bold;
+                    color: #007bff;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                    font-size: 11px;
+                }}
+                th, td {{
+                    border: 1px solid #dee2e6;
+                    padding: 8px;
+                    text-align: left;
+                }}
+                th {{
+                    background-color: #007bff;
+                    color: white;
+                    font-weight: bold;
+                    text-align: center;
+                }}
+                tr:nth-child(even) {{
+                    background-color: #f8f9fa;
+                }}
+                tr:last-child {{
+                    background-color: #e3f2fd;
+                    font-weight: bold;
+                }}
+                .text-center {{ text-align: center; }}
+                .text-right {{ text-align: right; }}
+                .text-success {{ color: #28a745; }}
+                .text-danger {{ color: #dc3545; }}
+                .tip-badge {{
+                    display: inline-block;
+                    padding: 3px 8px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                }}
+                .tip-fon {{ background-color: #007bff; color: white; }}
+                .tip-hisse {{ background-color: #28a745; color: white; }}
+                .tip-altin {{ background-color: #ffc107; color: #212529; }}
+                .tip-doviz {{ background-color: #17a2b8; color: white; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>{html.escape(current_user.username)} - Yatırım Portföyü Raporu</h1>
+                <p>Rapor Tarihi: {datetime.now().strftime('%d.%m.%Y %H:%M')}</p>
+            </div>
+            
+            <div class="summary">
+                <h3>Portföy Özeti</h3>
+                <div class="summary-grid">
+                    <div>
+                        <div class="summary-item">
+                            <span>Toplam Yatırım:</span>
+                            <span>₺{toplam_yatirim:,.2f}</span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Güncel Değer:</span>
+                            <span>₺{toplam_guncel:,.2f}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="summary-item">
+                            <span>Kar/Zarar:</span>
+                            <span class="{'text-success' if toplam_kar_zarar >= 0 else 'text-danger'}">
+                                ₺{toplam_kar_zarar:+,.2f}
+                            </span>
+                        </div>
+                        <div class="summary-item">
+                            <span>Getiri Oranı:</span>
+                            <span class="{'text-success' if getiri_orani >= 0 else 'text-danger'}">
+                                %{getiri_orani:+.2f}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """
+        
+        if yatirimlar:
+            html_content += """
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tip</th>
+                        <th>Kod</th>
+                        <th>İsim</th>
+                        <th>Alış Fiyatı</th>
+                        <th>Miktar</th>
+                        <th>Güncel Fiyat</th>
+                        <th>Toplam Değer</th>
+                        <th>Kar/Zarar</th>
+                        <th>Getiri %</th>
+                    </tr>
+                </thead>
+                <tbody>
+            """
+            
+            for yatirim in yatirimlar:
+                alis_tutari = float(yatirim.alis_fiyati * yatirim.miktar)
+                
+                if yatirim.guncel_fiyat:
+                    guncel_tutar = float(yatirim.guncel_fiyat * yatirim.miktar)
+                    kar_zarar = guncel_tutar - alis_tutari
+                    getiri_yuzde = (kar_zarar / alis_tutari * 100) if alis_tutari > 0 else 0
+                    kar_zarar_class = 'text-success' if kar_zarar >= 0 else 'text-danger'
+                    getiri_class = 'text-success' if getiri_yuzde >= 0 else 'text-danger'
+                    guncel_fiyat_str = f"₺{yatirim.guncel_fiyat:,.2f}"
+                    guncel_tutar_str = f"₺{guncel_tutar:,.2f}"
+                    kar_zarar_str = f"₺{kar_zarar:+,.2f}"
+                    getiri_str = f"%{getiri_yuzde:+.2f}"
+                else:
+                    kar_zarar_class = ''
+                    getiri_class = ''
+                    guncel_fiyat_str = "-"
+                    guncel_tutar_str = f"₺{alis_tutari:,.2f}"
+                    kar_zarar_str = "-"
+                    getiri_str = "-"
+                
+                html_content += f"""
+                    <tr>
+                        <td class="text-center">
+                            <span class="tip-badge tip-{yatirim.tip}">{yatirim.tip.upper()}</span>
+                        </td>
+                        <td class="text-center"><strong>{html.escape(yatirim.kod)}</strong></td>
+                        <td>{html.escape(yatirim.isim or '-')}</td>
+                        <td class="text-right">₺{yatirim.alis_fiyati:,.2f}</td>
+                        <td class="text-right">{yatirim.miktar:,.2f}</td>
+                        <td class="text-right">{guncel_fiyat_str}</td>
+                        <td class="text-right">{guncel_tutar_str}</td>
+                        <td class="text-right {kar_zarar_class}">{kar_zarar_str}</td>
+                        <td class="text-right {getiri_class}">{getiri_str}</td>
+                    </tr>
+                """
+            
+            html_content += f"""
+                    <tr>
+                        <td colspan="3" class="text-center"><strong>TOPLAM</strong></td>
+                        <td class="text-right"><strong>₺{toplam_yatirim:,.2f}</strong></td>
+                        <td class="text-right">-</td>
+                        <td class="text-right">-</td>
+                        <td class="text-right"><strong>₺{toplam_guncel:,.2f}</strong></td>
+                        <td class="text-right {'text-success' if toplam_kar_zarar >= 0 else 'text-danger'}">
+                            <strong>₺{toplam_kar_zarar:+,.2f}</strong>
+                        </td>
+                        <td class="text-right {'text-success' if getiri_orani >= 0 else 'text-danger'}">
+                            <strong>%{getiri_orani:+.2f}</strong>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            """
+        else:
+            html_content += """
+            <div style="text-align: center; padding: 50px; color: #666;">
+                <h3>Henüz yatırım kaydı bulunmamaktadır.</h3>
+                <p>İlk yatırımınızı ekleyerek başlayın!</p>
+            </div>
+            """
+        
+        html_content += """
+        </body>
+        </html>
+        """
+        
+        # Generate PDF using WeasyPrint
+        pdf_bytes = weasyprint.HTML(string=html_content).write_pdf()
+        
+        # Create response
+        response = make_response(pdf_bytes)
+        filename = f"portfoy_raporu_{current_user.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"PDF export error: {str(e)}")
+        flash('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.', 'error')
+        return redirect(url_for('yatirimlar'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -125,7 +125,11 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="text-muted">-</span>
+                                        {% if yatirim.tip in ['altin', 'doviz'] %}
+                                            <span class="text-info">API'den gelecek</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         {% if yatirim.guncel_fiyat %}
