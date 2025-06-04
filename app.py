@@ -835,5 +835,142 @@ def api_yatirim_dogrula():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# Portfolio Sharing Routes
+@app.route('/portfolio/share')
+@login_required
+def share_portfolio():
+    """Portföy paylaşım sayfası"""
+    from models import PaylasilanPortfoy
+    
+    user_portfolios = PaylasilanPortfoy.query.filter_by(paylasin_id=current_user.id).all()
+    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
+    return render_template('share_portfolio.html', portfolios=user_portfolios, yatirimlar=yatirimlar)
+
+@app.route('/portfolio/create_share', methods=['POST'])
+@login_required
+def create_shared_portfolio():
+    """Yeni paylaşılan portföy oluştur"""
+    from models import PaylasilanPortfoy, PaylasilanYatirim
+    
+    try:
+        baslik = request.form.get('baslik')
+        aciklama = request.form.get('aciklama', '')
+        is_public = request.form.get('is_public') == 'on'
+        selected_investments = request.form.getlist('selected_investments')
+        
+        if not baslik:
+            flash('Portföy başlığı gerekli', 'error')
+            return redirect(url_for('share_portfolio'))
+        
+        # Yeni paylaşılan portföy oluştur
+        portfoy = PaylasilanPortfoy(
+            baslik=baslik,
+            aciklama=aciklama,
+            paylasin_id=current_user.id,
+            is_public=is_public
+        )
+        db.session.add(portfoy)
+        db.session.flush()  # ID'yi al
+        
+        # Seçilen yatırımları ekle
+        for yatirim_id in selected_investments:
+            yatirim = Yatirim.query.filter_by(id=yatirim_id, user_id=current_user.id).first()
+            if yatirim:
+                paylasilan = PaylasilanYatirim(
+                    portfoy_id=portfoy.id,
+                    tip=yatirim.tip,
+                    kod=yatirim.kod,
+                    isim=yatirim.isim,
+                    alis_tarihi=yatirim.alis_tarihi,
+                    alis_fiyati=yatirim.alis_fiyati,
+                    miktar=yatirim.miktar,
+                    notlar=yatirim.notlar,
+                    kategori=yatirim.kategori
+                )
+                db.session.add(paylasilan)
+        
+        db.session.commit()
+        flash('Portföy başarıyla paylaşıldı!', 'success')
+        return redirect(url_for('share_portfolio'))
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Portföy paylaşım hatası: {str(e)}", exc_info=True)
+        flash('Portföy paylaşımında hata oluştu', 'error')
+        return redirect(url_for('share_portfolio'))
+
+@app.route('/community')
+def community_portfolios():
+    """Topluluk portföyleri sayfası"""
+    from models import PaylasilanPortfoy, User
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    
+    portfolios = PaylasilanPortfoy.query.filter_by(is_public=True)\
+        .order_by(PaylasilanPortfoy.created_at.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+    
+    return render_template('community.html', portfolios=portfolios)
+
+@app.route('/portfolio/view/<int:portfolio_id>')
+def view_shared_portfolio(portfolio_id):
+    """Paylaşılan portföyü görüntüle"""
+    from models import PaylasilanPortfoy, PaylasilanYatirim
+    
+    portfoy = PaylasilanPortfoy.query.get_or_404(portfolio_id)
+    
+    if not portfoy.is_public and (not current_user.is_authenticated or portfoy.paylasin_id != current_user.id):
+        flash('Bu portföy özel olarak paylaşılmış', 'error')
+        return redirect(url_for('community_portfolios'))
+    
+    # Görüntülenme sayısını artır
+    portfoy.view_count += 1
+    db.session.commit()
+    
+    yatirimlar = PaylasilanYatirim.query.filter_by(portfoy_id=portfolio_id).all()
+    
+    return render_template('view_shared_portfolio.html', portfoy=portfoy, yatirimlar=yatirimlar)
+
+@app.route('/portfolio/follow/<int:portfolio_id>')
+@login_required
+def follow_portfolio(portfolio_id):
+    """Portföyü takip et"""
+    from models import PaylasilanPortfoy, PortfoyTakip
+    
+    portfoy = PaylasilanPortfoy.query.get_or_404(portfolio_id)
+    
+    # Zaten takip ediliyor mu kontrol et
+    existing_follow = PortfoyTakip.query.filter_by(
+        takip_eden_id=current_user.id,
+        portfoy_id=portfolio_id
+    ).first()
+    
+    if existing_follow:
+        flash('Bu portföyü zaten takip ediyorsunuz', 'info')
+    else:
+        takip = PortfoyTakip(
+            takip_eden_id=current_user.id,
+            portfoy_id=portfolio_id
+        )
+        db.session.add(takip)
+        db.session.commit()
+        flash(f'{portfoy.baslik} portföyünü takip etmeye başladınız', 'success')
+    
+    return redirect(url_for('view_shared_portfolio', portfolio_id=portfolio_id))
+
+@app.route('/my-follows')
+@login_required
+def my_follows():
+    """Takip edilen portföyler"""
+    from models import PortfoyTakip, PaylasilanPortfoy
+    
+    takip_edilenler = db.session.query(PaylasilanPortfoy, PortfoyTakip)\
+        .join(PortfoyTakip, PaylasilanPortfoy.id == PortfoyTakip.portfoy_id)\
+        .filter(PortfoyTakip.takip_eden_id == current_user.id)\
+        .order_by(PortfoyTakip.created_at.desc()).all()
+    
+    return render_template('my_follows.html', takip_edilenler=takip_edilenler)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

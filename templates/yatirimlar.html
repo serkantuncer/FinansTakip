@@ -369,22 +369,24 @@ document.addEventListener('DOMContentLoaded', function() {
 // Predefined investment codes for search
 const investmentCodes = {
     'fon': [
+        { kod: 'TLI', isim: 'TÜRK LİRASI PARA PİYASASI FONU' },
+        { kod: 'TI2', isim: 'TEB PORTFÖY İKİNCİ FONU' },
+        { kod: 'AFA', isim: 'AKBANK PORTFÖY FLEKSİBEL FON A' },
+        { kod: 'TTE', isim: 'TEB PORTFÖY EURO FON' },
         { kod: 'ZBJ', isim: 'ZİRAAT PORTFÖY BAŞAK PARA PİYASASI (TL) FONU' },
         { kod: 'APK', isim: 'AKBANK PORTFÖY HİSSE SENEDİ FONU' },
         { kod: 'AEF', isim: 'AKBANK PORTFÖY EUROBOND (TL) FONU' },
-        { kod: 'AFT', isim: 'AKBANK PORTFÖY FLEKSİBEL FON SERİSİ 2' },
-        { kod: 'AHF', isim: 'AKBANK PORTFÖY HİSSE SENEDİ FONU' },
-        { kod: 'TEB', isim: 'TEB PORTFÖY HİSSE SENEDİ FONU' },
-        { kod: 'YAS', isim: 'YAPI KREDİ PORTFÖY A TİPİ SERBEST FON' }
+        { kod: 'AFT', isim: 'AKBANK PORTFÖY FLEKSİBEL FON SERİSİ 2' }
     ],
     'hisse': [
+        { kod: 'THY', isim: 'TÜRK HAVA YOLLARI A.O.' },
+        { kod: 'ZB', isim: 'ZİRAAT BANKASI A.Ş.' },
+        { kod: 'GA', isim: 'GARANTİ BANKASI A.Ş.' },
         { kod: 'THYAO', isim: 'TÜRK HAVA YOLLARI A.O.' },
         { kod: 'GARAN', isim: 'GARANTİ BANKASI A.Ş.' },
         { kod: 'ASELS', isim: 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.' },
         { kod: 'SISE', isim: 'ŞİŞE VE CAM FABRİKALARI A.Ş.' },
-        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
-        { kod: 'AKBNK', isim: 'AKBANK T.A.Ş.' },
-        { kod: 'ISCTR', isim: 'İŞ BANKASI (C) A.Ş.' }
+        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' }
     ],
     'altin': [
         { kod: 'GA', isim: 'Gram Altın' },
@@ -410,20 +412,20 @@ function updateCodePlaceholder() {
     
     const ornekler = {
         'fon': {
-            placeholder: 'Fon kodu girin (örn: ZBJ, APK, AEF...)',
-            ornekler: 'Popüler fonlar: ZBJ, APK, AEF, AFT, AHF - Yazmaya başlayın...'
+            placeholder: 'Fon kodu girin (örn: TLI, TI2, AFA, TTE...)',
+            ornekler: 'Örnek: TLI, TI2, AFA, TTE - Yazmaya başlayın...'
         },
         'hisse': {
-            placeholder: 'Hisse kodu girin (örn: THYAO, GARAN...)',
-            ornekler: 'Popüler hisseler: THYAO, GARAN, ASELS, SISE, BIMAS - Yazmaya başlayın...'
+            placeholder: 'Hisse kodu girin (örn: THY, ZB, GA...)',
+            ornekler: 'Örnek: THY, ZB, GA - Yazmaya başlayın...'
         },
         'altin': {
-            placeholder: 'Altın türü girin (örn: GA, C, Y...)',
-            ornekler: 'Altın türleri: GA (Gram), C (Çeyrek), Y (Yarım), T (Tam), ONS (Ons)'
+            placeholder: 'Altın türü girin (GA, C, Y, T, ONS)',
+            ornekler: 'GA (Gram Altın), C (Çeyrek), Y (Yarım), T (Tam), ONS'
         },
         'doviz': {
-            placeholder: 'Döviz kodu girin (örn: USD, EUR...)',
-            ornekler: 'Dövizler: USD, EUR, GBP, CHF, JPY - Yazmaya başlayın...'
+            placeholder: 'Döviz kodu girin (USD, EUR, GBP...)',
+            ornekler: 'Örnek: USD, EUR, GBP, CHF, JPY - Yazmaya başlayın...'
         }
     };
     
@@ -433,6 +435,7 @@ function updateCodePlaceholder() {
         kodOrnekleri.style.display = 'block';
         validateBtn.style.display = 'block';
         kodInput.disabled = false;
+        kodInput.removeAttribute('disabled');
     } else {
         kodInput.placeholder = 'Önce yatırım tipi seçin...';
         kodOrnekleri.style.display = 'none';

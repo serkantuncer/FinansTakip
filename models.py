@@ -69,3 +69,49 @@ class FiyatGecmisi(db.Model):
     
     def __repr__(self):
         return f'<FiyatGecmisi {self.yatirim_id} {self.tarih}>'
+
+class PaylasilanPortfoy(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    baslik = db.Column(db.String(200), nullable=False)
+    aciklama = db.Column(db.Text)
+    paylasin_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_public = db.Column(db.Boolean, default=True)
+    view_count = db.Column(db.Integer, default=0)
+    
+    # Relationships
+    paylasin = db.relationship('User', foreign_keys=[paylasin_id], backref='paylasilan_portfoyler')
+    
+    def __repr__(self):
+        return f'<PaylasilanPortfoy {self.baslik}>'
+
+class PaylasilanYatirim(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    portfoy_id = db.Column(db.Integer, db.ForeignKey('paylasilan_portfoy.id'), nullable=False)
+    tip = db.Column(db.String(20), nullable=False)
+    kod = db.Column(db.String(30), nullable=False)
+    isim = db.Column(db.String(100))
+    alis_tarihi = db.Column(db.DateTime, nullable=False)
+    alis_fiyati = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
+    miktar = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
+    notlar = db.Column(db.Text)
+    kategori = db.Column(db.String(30))
+    
+    # Relationships
+    portfoy = db.relationship('PaylasilanPortfoy', backref='yatirimlar')
+    
+    def __repr__(self):
+        return f'<PaylasilanYatirim {self.kod}>'
+
+class PortfoyTakip(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    takip_eden_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    portfoy_id = db.Column(db.Integer, db.ForeignKey('paylasilan_portfoy.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    takip_eden = db.relationship('User', backref='takip_edilen_portfoyler')
+    portfoy = db.relationship('PaylasilanPortfoy', backref='takipci_listesi')
+    
+    def __repr__(self):
+        return f'<PortfoyTakip {self.takip_eden_id}->{self.portfoy_id}>'
