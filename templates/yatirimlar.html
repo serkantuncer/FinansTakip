@@ -222,10 +222,8 @@
                             <label for="kod" class="form-label">Kod *</label>
                             <div class="input-group">
                                 <input type="text" class="form-control" id="kod" name="kod" required
-                                       placeholder="Yatırım tipi seçin..." 
-                                       oninput="searchCodes(this.value)" 
-                                       onblur="validateCode()"
-                                       autocomplete="off">
+                                       placeholder="Önce yatırım tipi seçin..." 
+                                       autocomplete="off" disabled>
                                 <button type="button" class="btn btn-outline-secondary" id="validateBtn" 
                                         onclick="validateCode()" style="display: none;">
                                     <i class="fas fa-search"></i>
@@ -525,85 +523,123 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to initialize modal form
     function initializeModalForm() {
-        console.log('Initializing modal form...');
+        console.log('=== INITIALIZING MODAL FORM ===');
+        
+        const tipSelect = document.getElementById('tip');
+        const kodInput = document.getElementById('kod');
+        
+        if (!tipSelect || !kodInput) {
+            console.error('Required elements not found:', {tipSelect: !!tipSelect, kodInput: !!kodInput});
+            return;
+        }
         
         // Initialize code input as disabled
-        const kodInput = document.getElementById('kod');
-        if (kodInput) {
-            kodInput.disabled = true;
-            kodInput.setAttribute('disabled', 'disabled');
+        kodInput.disabled = true;
+        kodInput.placeholder = "Önce yatırım tipi seçin...";
+        
+        console.log('Setting up DIRECT event handling...');
+        
+        // Method 1: Direct onchange override
+        tipSelect.onchange = function() {
+            console.log('>>> DIRECT ONCHANGE FIRED! New value:', this.value);
+            updateFormBasedOnType(this.value);
+        };
+        
+        // Method 2: addEventListener as backup
+        tipSelect.addEventListener('change', function() {
+            console.log('>>> ADDEVENTLISTENER CHANGE FIRED! New value:', this.value);
+            updateFormBasedOnType(this.value);
+        });
+        
+        // Method 3: Simple polling as final backup
+        let lastKnownValue = tipSelect.value;
+        const checkInterval = setInterval(function() {
+            if (tipSelect.value !== lastKnownValue) {
+                console.log('>>> POLLING DETECTED CHANGE from', lastKnownValue, 'to', tipSelect.value);
+                lastKnownValue = tipSelect.value;
+                updateFormBasedOnType(tipSelect.value);
+            }
+        }, 300);
+        
+        // Cleanup on modal close
+        const modal = document.getElementById('yatirimEkleModal');
+        if (modal) {
+            modal.addEventListener('hidden.bs.modal', function() {
+                clearInterval(checkInterval);
+            });
         }
         
-        // Add event listener to investment type select
-        const tipSelect = document.getElementById('tip');
-        if (tipSelect) {
-            console.log('Setting up investment type monitoring...');
-            
-            let lastValue = tipSelect.value;
-            
-            // Method 1: MutationObserver to watch for attribute changes
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
-                        console.log('MutationObserver detected value change:', tipSelect.value);
-                        handleInvestmentTypeChange();
-                    }
-                });
-            });
-            
-            observer.observe(tipSelect, { 
-                attributes: true, 
-                attributeFilter: ['value'] 
-            });
-            
-            // Method 2: Polling to check for value changes
-            const pollInterval = setInterval(function() {
-                if (tipSelect.value !== lastValue) {
-                    console.log('POLLING detected change from', lastValue, 'to', tipSelect.value);
-                    lastValue = tipSelect.value;
-                    handleInvestmentTypeChange();
-                }
-            }, 200); // Check every 200ms
-            
-            // Method 3: Event delegation on the parent
-            tipSelect.parentElement.addEventListener('click', function(e) {
-                if (e.target === tipSelect) {
-                    setTimeout(() => {
-                        console.log('PARENT CLICK detected, current value:', tipSelect.value);
-                        handleInvestmentTypeChange();
-                    }, 50);
-                }
-            });
-            
-            // Method 4: Focus/blur events
-            tipSelect.addEventListener('focus', function() {
-                lastValue = this.value;
-                console.log('SELECT focused, initial value:', lastValue);
-            });
-            
-            tipSelect.addEventListener('blur', function() {
-                console.log('SELECT blurred, checking value change from', lastValue, 'to', this.value);
-                if (this.value !== lastValue) {
-                    handleInvestmentTypeChange();
-                }
-            });
-            
-            // Clean up polling when modal is hidden
-            const modal = document.getElementById('yatirimEkleModal');
-            if (modal) {
-                modal.addEventListener('hidden.bs.modal', function() {
-                    console.log('Modal hidden, cleaning up polling');
-                    clearInterval(pollInterval);
-                    observer.disconnect();
-                });
-            }
-            
-            // Initial call to set correct state
-            console.log('Making initial call to handleInvestmentTypeChange');
-            handleInvestmentTypeChange();
-        } else {
-            console.log('ERROR: tip select element not found!');
+        console.log('Event handlers set up. Initial state update...');
+        updateFormBasedOnType(tipSelect.value);
+    }
+    
+    // Simplified form update function
+    function updateFormBasedOnType(selectedType) {
+        console.log('=== UPDATING FORM FOR TYPE:', selectedType, '===');
+        
+        const kodInput = document.getElementById('kod');
+        const kodOrnekleri = document.getElementById('kodOrnekleri');
+        const validateBtn = document.getElementById('validateBtn');
+        
+        if (!kodInput) {
+            console.error('Kod input not found!');
+            return;
         }
+        
+        if (!selectedType || selectedType === '') {
+            console.log('No type selected, disabling input');
+            kodInput.disabled = true;
+            kodInput.placeholder = "Önce yatırım tipi seçin...";
+            if (kodOrnekleri) kodOrnekleri.style.display = 'none';
+            if (validateBtn) validateBtn.style.display = 'none';
+            return;
+        }
+        
+        // Enable the input and set appropriate placeholder
+        console.log('ENABLING INPUT for type:', selectedType);
+        kodInput.disabled = false;
+        kodInput.removeAttribute('disabled');
+        
+        // Set placeholders and examples based on type
+        const typeConfig = {
+            'fon': {
+                placeholder: 'Örn: TI2, AFA, TLI',
+                examples: 'Örnekler: TI2 (İş Portföy BIST-30), AFA (Ak Portföy Petkim), TLI (Türkiye İş Portföy Likit)'
+            },
+            'hisse': {
+                placeholder: 'Örn: THYAO, ISCTR, GARAN',
+                examples: 'Örnekler: THYAO (Türk Hava Yolları), ISCTR (İş Bankası C), GARAN (Garanti BBVA)'
+            },
+            'altin': {
+                placeholder: 'Örn: GA, C, Y, T',
+                examples: 'Örnekler: GA (Gram Altın), C (Çeyrek Altın), Y (Yarım Altın), T (Tam Altın)'
+            },
+            'doviz': {
+                placeholder: 'Örn: USD, EUR, GBP',
+                examples: 'Örnekler: USD (Amerikan Doları), EUR (Euro), GBP (İngiliz Sterlini)'
+            }
+        };
+        
+        const config = typeConfig[selectedType];
+        if (config) {
+            kodInput.placeholder = config.placeholder;
+            if (kodOrnekleri) {
+                kodOrnekleri.textContent = config.examples;
+                kodOrnekleri.style.display = 'block';
+            }
+        }
+        
+        if (validateBtn) validateBtn.style.display = 'inline-block';
+        
+        // Re-add event handlers to the now-enabled input
+        kodInput.oninput = function() {
+            searchCodes(this.value);
+        };
+        kodInput.onblur = function() {
+            validateCode();
+        };
+        
+        console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
     }
     
     // Initialize on page load
