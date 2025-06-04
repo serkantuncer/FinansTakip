@@ -537,35 +537,66 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add event listener to investment type select
         const tipSelect = document.getElementById('tip');
         if (tipSelect) {
-            console.log('Adding event listeners to tip select');
+            console.log('Setting up investment type monitoring...');
             
-            // Remove existing listeners to avoid duplicates and try multiple event types
-            const changeHandler = function(e) {
-                console.log('SELECT CHANGED! Event type:', e.type, 'value:', e.target.value);
-                handleInvestmentTypeChange();
-            };
+            let lastValue = tipSelect.value;
             
-            // Remove any existing listeners
-            tipSelect.removeEventListener('change', changeHandler);
-            tipSelect.removeEventListener('input', changeHandler);
-            tipSelect.removeEventListener('click', changeHandler);
-            
-            // Add multiple event listeners
-            tipSelect.addEventListener('change', changeHandler);
-            tipSelect.addEventListener('input', changeHandler);
-            tipSelect.addEventListener('click', function(e) {
-                // Delay to allow select to update
-                setTimeout(() => {
-                    console.log('SELECT CLICKED! Current value:', tipSelect.value);
-                    handleInvestmentTypeChange();
-                }, 10);
+            // Method 1: MutationObserver to watch for attribute changes
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                        console.log('MutationObserver detected value change:', tipSelect.value);
+                        handleInvestmentTypeChange();
+                    }
+                });
             });
             
-            // Add listener using old-school method as backup
-            tipSelect.onchange = function() {
-                console.log('ONCHANGE fired! Value:', this.value);
-                handleInvestmentTypeChange();
-            };
+            observer.observe(tipSelect, { 
+                attributes: true, 
+                attributeFilter: ['value'] 
+            });
+            
+            // Method 2: Polling to check for value changes
+            const pollInterval = setInterval(function() {
+                if (tipSelect.value !== lastValue) {
+                    console.log('POLLING detected change from', lastValue, 'to', tipSelect.value);
+                    lastValue = tipSelect.value;
+                    handleInvestmentTypeChange();
+                }
+            }, 200); // Check every 200ms
+            
+            // Method 3: Event delegation on the parent
+            tipSelect.parentElement.addEventListener('click', function(e) {
+                if (e.target === tipSelect) {
+                    setTimeout(() => {
+                        console.log('PARENT CLICK detected, current value:', tipSelect.value);
+                        handleInvestmentTypeChange();
+                    }, 50);
+                }
+            });
+            
+            // Method 4: Focus/blur events
+            tipSelect.addEventListener('focus', function() {
+                lastValue = this.value;
+                console.log('SELECT focused, initial value:', lastValue);
+            });
+            
+            tipSelect.addEventListener('blur', function() {
+                console.log('SELECT blurred, checking value change from', lastValue, 'to', this.value);
+                if (this.value !== lastValue) {
+                    handleInvestmentTypeChange();
+                }
+            });
+            
+            // Clean up polling when modal is hidden
+            const modal = document.getElementById('yatirimEkleModal');
+            if (modal) {
+                modal.addEventListener('hidden.bs.modal', function() {
+                    console.log('Modal hidden, cleaning up polling');
+                    clearInterval(pollInterval);
+                    observer.disconnect();
+                });
+            }
             
             // Initial call to set correct state
             console.log('Making initial call to handleInvestmentTypeChange');
