@@ -317,88 +317,148 @@ def altin_verisi_cek(altin_turu_kodu):
     alt_username = os.environ.get('ALTINKAYNAK_USERNAME', username)
     alt_password = os.environ.get('ALTINKAYNAK_PASSWORD', password)
 
+    # XML içindeki 'Aciklama' etiketine göre eşleştirme (YANITTAN ALINAN GERÇEK DEĞERLER!)
     altin_tipi_map = {
-        'GA': 'Gram Altın',
-        'C': 'Çeyrek Altın',
-        'Y': 'Yarım Altın',
-        'T': 'Tam Altın'
+        'GA': 'Gram Altın',       # XML'deki Açıklama ile eşleşiyor
+        'C': 'Çeyrek Altın',      # XML'deki Açıklama ile eşleşiyor
+        'Y': 'Yarım Altın',       # XML'deki Açıklama ile eşleşiyor
+        'T': 'Teklik Altın',      # XML'deki Açıklama 'Teklik Altın' (Cumhuriyet değil)
+        # 'ONS': 'ONS',           # ONS için XML'de doğrudan eşleşme yok
     }
 
     if altin_turu_kodu_upper not in altin_tipi_map:
         app.logger.error(f"Desteklenmeyen altın türü: {altin_turu_kodu_upper}")
         return None
 
+    # SOAP 1.1 İstek XML'ini oluşturma (f-string ile)
     soap_xml = f"""<?xml version="1.0" encoding="utf-8"?>
-    <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-      <soap:Body>
-        <GetLive xmlns="http://tempuri.org/">
-          <user>{username}</user>
-          <pass>{password}</pass>
-        </GetLive>
-      </soap:Body>
-    </soap:Envelope>"""
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>
+    <AuthHeader xmlns="http://data.altinkaynak.com/">
+      <Username>{username}</Username>
+      <Password>{password}</Password>
+    </AuthHeader>
+  </soap:Header>
+  <soap:Body>
+    <GetGold xmlns="http://data.altinkaynak.com/" />
+  </soap:Body>
+</soap:Envelope>"""
 
+    # HTTP Header'larını ayarlama (SOAP 1.1 için)
     headers = {
         'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': 'http://tempuri.org/GetLive',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'SOAPAction': '"http://data.altinkaynak.com/GetGold"',
+        'Host': 'data.altinkaynak.com'
     }
 
     try:
-        response = requests.post(service_url, data=soap_xml, headers=headers, timeout=30)
-        app.logger.debug(f"SOAP Response Status: {response.status_code}")
+        # POST isteğini gönderme
+        response = requests.post(service_url, headers=headers, data=soap_xml.encode('utf-8'), timeout=20)
+        response.raise_for_status() # HTTP 4xx/5xx hatalarını kontrol et
 
-        if response.status_code != 200:
-            app.logger.error(f"SOAP servis HTTP {response.status_code} hatası verdi.")
+        # Yanıt XML'ini parse etme
+        try:
+            response_xml_root = ET.fromstring(response.content)
+            namespaces = {
+                'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+                'ak': 'http://data.altinkaynak.com/'
+            }
+            get_gold_result_element = response_xml_root.find('.//soap:Body/ak:GetGoldResponse/ak:GetGoldResult', namespaces)
+
+            if get_gold_result_element is None or get_gold_result_element.text is None:
+                 get_gold_result_element = response_xml_root.find('.//{http://data.altinkaynak.com/}GetGoldResult')
+                 if get_gold_result_element is None or get_gold_result_element.text is None:
+                    app.logger.warning("Altinkaynak yanıt XML'inde GetGoldResult etiketi veya içeriği bulunamadı.")
+                    app.logger.debug(f"Alınan yanıt içeriği (ilk 500kr): {response.text[:500]}")
+                    if "Nesne başvurusu" in response.text:
+                        app.logger.error("Altinkaynak servisi 'Nesne başvurusu' hatası döndürdü (yetkilendirme hatası olabilir)")
+                    return None
+
+            inner_xml_string = get_gold_result_element.text
+            # TAM YANITI LOGLA (DEBUG İÇİN) - Eğer çok uzunsa sorun olabilir, gerekirse kısaltılabilir.
+            app.logger.debug(f"Altinkaynak GetGoldResult İçerik Stringi (ilk 1000kr): {inner_xml_string[:1000]}...") # İlk 1000 karakter daha güvenli
+
+            # --- Bu string'i de XML olarak parse et ---
+            try:
+                inner_root = ET.fromstring(inner_xml_string)
+                app.logger.debug(f"Inner XML root tag adı: '{inner_root.tag}'") # Beklenen: Kurlar
+                altin_bulundu = False
+
+                # Inner XML içindeki altın kayıtlarını bul (Yapı: <Kur>...</Kur>)
+                kur_elements = inner_root.findall('./Kur') # Doğrudan root altındaki Kur'ları ara
+                app.logger.debug(f"Toplam {len(kur_elements)} adet <Kur> elementi bulundu.")
+
+                for i, kur_element in enumerate(kur_elements):
+                    aciklama_raw = kur_element.findtext('Aciklama')
+                    satis_str = kur_element.findtext('Satis')
+                    log_prefix = f"[Kur {i+1}/{len(kur_elements)}]"
+
+                    if aciklama_raw and satis_str:
+                        aciklama_clean = aciklama_raw.strip()
+                        target_aciklama = altin_tipi_map[altin_turu_kodu_upper]
+                        aranan_lower = target_aciklama.lower()
+                        bulunan_lower = aciklama_clean.lower()
+                        eslesme_sonucu = (aranan_lower == bulunan_lower)
+
+                        app.logger.debug(f"{log_prefix} Aciklama Raw: '{aciklama_raw}', Clean: '{aciklama_clean}', Satis: '{satis_str}'")
+                        app.logger.debug(f"{log_prefix} KARŞILAŞTIRMA: Aranan (lower): '{aranan_lower}', Bulunan (lower): '{bulunan_lower}', SONUÇ (==): {eslesme_sonucu}")
+
+                        if eslesme_sonucu: # Tam eşleşme kontrolü
+                            try:
+                                fiyat = Decimal(satis_str.replace(',', '.'))
+                            except (InvalidOperation, TypeError) as e_decimal:
+                                app.logger.error(f"{log_prefix} Altinkaynak Inner XML fiyatı ('{aciklama_clean}') çevirme hatası: '{satis_str}', Hata: {e_decimal}")
+                                continue # Sonraki kayda geç
+
+                            # Also get buying price if available
+                            alis_str = kur_element.findtext('Alis')
+                            alis_fiyat = None
+                            if alis_str:
+                                try:
+                                    alis_fiyat = Decimal(alis_str.replace(',', '.'))
+                                except (InvalidOperation, TypeError):
+                                    pass
+
+                            veri = {
+                                'isim': aciklama_clean,
+                                'guncel_fiyat': fiyat,  # Selling price
+                                'alis_fiyat': alis_fiyat,  # Buying price
+                                'satis_fiyat': fiyat,   # Selling price (explicit)
+                                'tarih': datetime.now()
+                            }
+                            app.logger.info(f"Altinkaynak Altın Verisi (Manuel SOAP) Başarıyla Çekildi: {altin_turu_kodu_upper} ({aciklama_clean}) - Fiyat: {fiyat}")
+                            altin_bulundu = True
+                            return veri # Eşleşme bulundu, döngüden ve fonksiyondan çık
+                    else:
+                         app.logger.warning(f"{log_prefix} Aciklama veya Satis etiketi bulunamadı veya boş.")
+
+                # Eğer döngü bittiyse ve altın bulunamadıysa
+                if not altin_bulundu:
+                    app.logger.warning(f"Döngü bitti. Altinkaynak Inner XML içinde aranan altın türü bulunamadı: '{target_aciklama}' (Kod: {altin_turu_kodu_upper})")
+                    return None
+                
+            except ET.ParseError as e:
+                app.logger.error(f"Altın veri XML'i parse edilemedi: {str(e)}")
+                app.logger.debug(f"Parse edilemeyen XML: {inner_xml_string[:200]}")
+                return None
+                
+        except ET.ParseError as e:
+            app.logger.error(f"SOAP yanıt XML'i parse edilemedi: {str(e)}")
+            app.logger.debug(f"Parse edilemeyen yanıt: {response.text[:200]}")
             return None
 
-        xml_content = response.text
-        root = ET.fromstring(xml_content)
-
-        ns = {
-            'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
-            'ns': 'http://tempuri.org/'
-        }
-
-        get_live_result = root.find('.//ns:GetLiveResult', ns)
-        
-        if get_live_result is None:
-            app.logger.error("GetLiveResult elementi bulunamadı.")
-            return None
-
-        xml_data = get_live_result.text
-        data_root = ET.fromstring(xml_data)
-
-        target_aciklama = altin_tipi_map[altin_turu_kodu_upper]
-
-        for item in data_root.findall('item'):
-            aciklama_elem = item.find('Aciklama')
-            if aciklama_elem is not None and aciklama_elem.text == target_aciklama:
-                satis_elem = item.find('Satis')
-                if satis_elem is not None:
-                    try:
-                        fiyat = Decimal(satis_elem.text.replace(',', '.'))
-                        
-                        return {
-                            'isim': target_aciklama,
-                            'guncel_fiyat': fiyat,
-                            'tarih': datetime.now()
-                        }
-                    except (InvalidOperation, ValueError) as e:
-                        app.logger.error(f"Altın fiyatı Decimal'e çevrilemedi: {satis_elem.text}, hata: {e}")
-                        return None
-
-        app.logger.warning(f"Altın türü bulunamadı: {target_aciklama}")
-        return None
-
+    except requests.exceptions.Timeout:
+         app.logger.error(f"Altinkaynak Manuel SOAP isteği zaman aşımına uğradı ({altin_turu_kodu_upper}).")
+         return None
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Altın veri çekme Request hatası: {str(e)}")
-        return None
-    except ET.ParseError as e:
-        app.logger.error(f"XML parsing hatası: {str(e)}")
+        app.logger.error(f"Altinkaynak Manuel SOAP isteği hatası ({altin_turu_kodu_upper}): {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+             app.logger.error(f"Altinkaynak Hata Yanıt Kodu: {e.response.status_code}, Yanıt: {e.response.text[:200]}")
+             if "Nesne başvurusu" in e.response.text:
+                  app.logger.error("Altinkaynak sunucusu hala 'Nesne Başvurusu' hatası veriyor (HTTP Hata Kodu üzerinden).")
         return None
     except Exception as e:
-        app.logger.error(f"Altın veri çekme genel hatası: {str(e)}", exc_info=True)
+        app.logger.error(f"Altinkaynak Altın verisi çekme (Manuel SOAP Genel) hatası ({altin_turu_kodu_upper}): {str(e)}", exc_info=True)
         return None
 
 def doviz_verisi_cek(doviz_kodu):
@@ -423,19 +483,53 @@ def doviz_verisi_cek(doviz_kodu):
         
         for currency in root.findall('Currency'):
             if currency.get('Kod') == doviz_kodu_upper:
+                # Get both buying and selling prices
+                buying_elem = currency.find('BanknoteBuying')
                 selling_elem = currency.find('BanknoteSelling')
+                forex_buying_elem = currency.find('ForexBuying')
+                forex_selling_elem = currency.find('ForexSelling')
+                
+                alis_fiyat = None
+                satis_fiyat = None
+                
+                # Try banknote buying first, then forex buying
+                if buying_elem is not None and buying_elem.text:
+                    try:
+                        alis_fiyat = Decimal(buying_elem.text.replace(',', '.'))
+                    except (InvalidOperation, ValueError):
+                        pass
+                elif forex_buying_elem is not None and forex_buying_elem.text:
+                    try:
+                        alis_fiyat = Decimal(forex_buying_elem.text.replace(',', '.'))
+                    except (InvalidOperation, ValueError):
+                        pass
+                
+                # Try banknote selling first, then forex selling
                 if selling_elem is not None and selling_elem.text:
                     try:
-                        fiyat = Decimal(selling_elem.text.replace(',', '.'))
-                        
-                        return {
-                            'isim': f"{doviz_kodu_upper}/TRY",
-                            'guncel_fiyat': fiyat,
-                            'tarih': datetime.now()
-                        }
+                        satis_fiyat = Decimal(selling_elem.text.replace(',', '.'))
                     except (InvalidOperation, ValueError):
-                        app.logger.error(f"Döviz fiyatı çevrilemedi: {selling_elem.text}")
-                        return None
+                        pass
+                elif forex_selling_elem is not None and forex_selling_elem.text:
+                    try:
+                        satis_fiyat = Decimal(forex_selling_elem.text.replace(',', '.'))
+                    except (InvalidOperation, ValueError):
+                        pass
+                
+                # Use selling price as main price (for consistency with existing behavior)
+                guncel_fiyat = satis_fiyat if satis_fiyat else alis_fiyat
+                
+                if guncel_fiyat:
+                    return {
+                        'isim': f"{doviz_kodu_upper}/TRY",
+                        'guncel_fiyat': guncel_fiyat,
+                        'alis_fiyat': alis_fiyat,
+                        'satis_fiyat': satis_fiyat,
+                        'tarih': datetime.now()
+                    }
+                else:
+                    app.logger.error(f"TCMB'den {doviz_kodu_upper} için fiyat bilgisi alınamadı")
+                    return None
         
         app.logger.warning(f"Döviz kodu bulunamadı: {doviz_kodu_upper}")
         return None
