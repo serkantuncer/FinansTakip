@@ -405,14 +405,26 @@ const investmentCodes = {
 };
 
 function handleInvestmentTypeChange() {
+    console.log('=== handleInvestmentTypeChange called ===');
     const tipSelect = document.getElementById('tip');
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
     
-    if (!tipSelect || !kodInput) return;
+    console.log('Elements found:', {
+        tipSelect: !!tipSelect,
+        kodInput: !!kodInput,
+        kodOrnekleri: !!kodOrnekleri,
+        validateBtn: !!validateBtn
+    });
+    
+    if (!tipSelect || !kodInput) {
+        console.log('Missing essential elements, returning');
+        return;
+    }
     
     const tip = tipSelect.value;
+    console.log('Selected investment type:', tip);
     
     const ornekler = {
         'fon': {
@@ -434,36 +446,56 @@ function handleInvestmentTypeChange() {
     };
     
     if (tip && ornekler[tip]) {
+        console.log('ENABLING code input for type:', tip);
+        
         // Enable and configure the code input
+        console.log('Before enable - disabled status:', kodInput.disabled);
         kodInput.disabled = false;
         kodInput.removeAttribute('disabled');
+        console.log('After enable - disabled status:', kodInput.disabled);
+        
         kodInput.placeholder = ornekler[tip].placeholder;
+        console.log('Set placeholder to:', ornekler[tip].placeholder);
         
         // Show examples
         if (kodOrnekleri) {
             kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
             kodOrnekleri.style.display = 'block';
+            console.log('Examples shown');
         }
         
         // Show validate button
         if (validateBtn) {
             validateBtn.style.display = 'block';
+            console.log('Validate button shown');
         }
+        
+        console.log('Code input should now be ENABLED');
     } else {
+        console.log('DISABLING code input - tip is empty or invalid');
+        
         // Disable the code input
+        console.log('Before disable - disabled status:', kodInput.disabled);
         kodInput.disabled = true;
         kodInput.setAttribute('disabled', 'disabled');
+        console.log('After disable - disabled status:', kodInput.disabled);
+        
         kodInput.placeholder = 'Önce yatırım tipi seçin...';
+        console.log('Set placeholder to: Önce yatırım tipi seçin...');
         
         // Hide examples
         if (kodOrnekleri) {
             kodOrnekleri.style.display = 'none';
+            console.log('Examples hidden');
         }
         
         // Hide validate button
         if (validateBtn) {
             validateBtn.style.display = 'none';
+            console.log('Validate button hidden');
         }
+        
+        console.log('Code input should now be DISABLED');
     }
     
     // Clear previous values and results
@@ -501,11 +533,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener to investment type select
     const tipSelect = document.getElementById('tip');
     if (tipSelect) {
-        tipSelect.addEventListener('change', handleInvestmentTypeChange);
-        tipSelect.addEventListener('input', handleInvestmentTypeChange);
+        console.log('Adding event listeners to tip select');
+        
+        tipSelect.addEventListener('change', function(e) {
+            console.log('CHANGE event fired, value:', e.target.value);
+            handleInvestmentTypeChange();
+        });
+        
+        tipSelect.addEventListener('input', function(e) {
+            console.log('INPUT event fired, value:', e.target.value);
+            handleInvestmentTypeChange();
+        });
         
         // Initial call to set correct state
+        console.log('Making initial call to handleInvestmentTypeChange');
         handleInvestmentTypeChange();
+    } else {
+        console.log('ERROR: tip select element not found!');
     }
 });
 
