@@ -345,44 +345,36 @@
                 </div>
                 <div class="card-body">
                     {% if yatirimlar %}
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="yatirimlarTable">
-                                <thead>
-                                    <tr>
-                                        <th>Kod</th>
-                                        <th>İsim</th>
-                                        <th>Tip</th>
-                                        <th>Kategori</th>
-                                        <th>Alış Fiyatı</th>
-                                        <th>Güncel Fiyat</th>
-                                        <th>Miktar</th>
-                                        <th>Güncel Değer</th>
-                                        <th>Kâr/Zarar</th>
-                                        <th>Bilgi</th>
-                                    </tr>
-                                </thead>
+                        <!-- Desktop Table View -->
+                        <div class="d-none d-xl-block">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="yatirimlarTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Kod</th>
+                                            <th>İsim</th>
+                                            <th>Tip</th>
+                                            <th>Alış Fiyatı</th>
+                                            <th>Güncel Fiyat</th>
+                                            <th>Güncel Değer</th>
+                                            <th>Kâr/Zarar</th>
+                                            <th>Bilgi</th>
+                                        </tr>
+                                    </thead>
                                 <tbody>
                                     {% for yatirim in yatirimlar %}
                                     <tr data-kategori="{{ yatirim.kategori or '' }}">
                                         <td><strong>{{ yatirim.kod }}</strong></td>
-                                        <td>{{ yatirim.isim[:25] + '...' if yatirim.isim and yatirim.isim|length > 25 else yatirim.isim or '-' }}</td>
+                                        <td>{{ yatirim.isim[:20] + '...' if yatirim.isim and yatirim.isim|length > 20 else yatirim.isim or '-' }}</td>
                                         <td><span class="badge bg-secondary">{{ yatirim.tip|title }}</span></td>
-                                        <td>
-                                            {% if yatirim.kategori %}
-                                                <span class="badge bg-info">{{ yatirim.kategori }}</span>
-                                            {% else %}
-                                                <span class="text-muted">-</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>₺{{ "{:,.6f}".format(yatirim.alis_fiyati) }}</td>
+                                        <td>₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</td>
                                         <td>
                                             {% if yatirim.guncel_fiyat %}
-                                                ₺{{ "{:,.6f}".format(yatirim.guncel_fiyat) }}
+                                                ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ "{:,.2f}".format(yatirim.miktar) }}</td>
                                         <td>
                                             {% if yatirim.guncel_fiyat %}
                                                 ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
@@ -411,6 +403,86 @@
                                     {% endfor %}
                                 </tbody>
                             </table>
+                        </div>
+                        </div>
+                        
+                        <!-- Mobile/Tablet Card View -->
+                        <div class="d-xl-none" id="yatirimlarMobile">
+                            {% for yatirim in yatirimlar %}
+                            <div class="card mb-3 border-0 border-bottom" data-kategori="{{ yatirim.kategori or '' }}">
+                                <div class="card-body py-3">
+                                    <div class="row align-items-center mb-2">
+                                        <div class="col-6">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <strong class="text-primary me-2">{{ yatirim.kod }}</strong>
+                                                <span class="badge bg-secondary">{{ yatirim.tip|title }}</span>
+                                            </div>
+                                            <small class="text-muted d-block text-truncate" title="{{ yatirim.isim or 'İsim yok' }}">
+                                                {{ yatirim.isim[:35] + '...' if yatirim.isim and yatirim.isim|length > 35 else yatirim.isim or '-' }}
+                                            </small>
+                                            {% if yatirim.kategori %}
+                                                <span class="badge bg-info mt-1">{{ yatirim.kategori }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            {% if yatirim.guncel_fiyat %}
+                                                {% set kar_zarar = (yatirim.guncel_fiyat - yatirim.alis_fiyati) * yatirim.miktar %}
+                                                <div class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                                    ₺{{ "{:+,.2f}".format(kar_zarar) }}
+                                                </div>
+                                                <div class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    {% if kar_zarar != 0 %}
+                                                        {{ "{:+.2f}".format((kar_zarar / (yatirim.alis_fiyati * yatirim.miktar)) * 100) }}%
+                                                    {% else %}
+                                                        0.00%
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-4">
+                                            <small class="text-muted">Alış</small>
+                                            <div class="fw-bold">₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">Güncel</small>
+                                            <div class="fw-bold">
+                                                {% if yatirim.guncel_fiyat %}
+                                                    ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">Toplam Değer</small>
+                                            <div class="fw-bold">
+                                                {% if yatirim.guncel_fiyat %}
+                                                    ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-6">
+                                            <small class="text-muted">Miktar: {{ "{:,.2f}".format(yatirim.miktar) }}</small>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <button type="button" class="btn btn-outline-info btn-sm" 
+                                                    onclick="showInvestmentDetail({{ yatirim.id }})" 
+                                                    data-bs-toggle="modal" data-bs-target="#detailModal">
+                                                <i class="fas fa-info-circle me-1"></i>Detay
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
                     {% else %}
                         <div class="text-center py-5">
@@ -454,14 +526,26 @@
 <script>
 function filterByCategory() {
     const filter = document.getElementById('kategoriFilter').value;
-    const rows = document.querySelectorAll('#yatirimlarTable tbody tr');
     
+    // Filter desktop table rows
+    const rows = document.querySelectorAll('#yatirimlarTable tbody tr');
     rows.forEach(row => {
         const kategori = row.getAttribute('data-kategori');
         if (filter === '' || kategori === filter) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
+        }
+    });
+    
+    // Filter mobile cards
+    const cards = document.querySelectorAll('#yatirimlarMobile .card');
+    cards.forEach(card => {
+        const kategori = card.getAttribute('data-kategori');
+        if (filter === '' || kategori === filter) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
         }
     });
 }
