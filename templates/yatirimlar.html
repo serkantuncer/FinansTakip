@@ -404,14 +404,16 @@ const investmentCodes = {
     ]
 };
 
-function updateCodePlaceholder() {
+function updateCodePlaceholder(event) {
     console.log('updateCodePlaceholder called'); // Debug log
-    const tip = document.getElementById('tip').value;
+    const tipSelect = document.getElementById('tip');
+    const tip = tipSelect ? tipSelect.value : '';
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
     
     console.log('Selected tip:', tip); // Debug log
+    console.log('Tip element found:', !!tipSelect); // Debug log
     
     const ornekler = {
         'fon': {
@@ -480,6 +482,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (kodInput) {
         kodInput.disabled = true;
         kodInput.setAttribute('disabled', 'disabled');
+    }
+    
+    // Add event listener to investment type select
+    const tipSelect = document.getElementById('tip');
+    if (tipSelect) {
+        console.log('Adding event listener to tip select'); // Debug log
+        tipSelect.addEventListener('change', function(e) {
+            console.log('Change event fired, value:', e.target.value); // Debug log
+            updateCodePlaceholder(e);
+        });
     }
 });
 
