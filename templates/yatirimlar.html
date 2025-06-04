@@ -523,33 +523,54 @@ document.addEventListener('DOMContentLoaded', function() {
         dateInput.value = today;
     }
     
-    // Initialize code input as disabled
-    const kodInput = document.getElementById('kod');
-    if (kodInput) {
-        kodInput.disabled = true;
-        kodInput.setAttribute('disabled', 'disabled');
+    // Function to initialize modal form
+    function initializeModalForm() {
+        console.log('Initializing modal form...');
+        
+        // Initialize code input as disabled
+        const kodInput = document.getElementById('kod');
+        if (kodInput) {
+            kodInput.disabled = true;
+            kodInput.setAttribute('disabled', 'disabled');
+        }
+        
+        // Add event listener to investment type select
+        const tipSelect = document.getElementById('tip');
+        if (tipSelect) {
+            console.log('Adding event listeners to tip select');
+            
+            // Remove existing listeners to avoid duplicates
+            tipSelect.removeEventListener('change', handleInvestmentTypeChange);
+            tipSelect.removeEventListener('input', handleInvestmentTypeChange);
+            
+            tipSelect.addEventListener('change', function(e) {
+                console.log('CHANGE event fired, value:', e.target.value);
+                handleInvestmentTypeChange();
+            });
+            
+            tipSelect.addEventListener('input', function(e) {
+                console.log('INPUT event fired, value:', e.target.value);
+                handleInvestmentTypeChange();
+            });
+            
+            // Initial call to set correct state
+            console.log('Making initial call to handleInvestmentTypeChange');
+            handleInvestmentTypeChange();
+        } else {
+            console.log('ERROR: tip select element not found!');
+        }
     }
     
-    // Add event listener to investment type select
-    const tipSelect = document.getElementById('tip');
-    if (tipSelect) {
-        console.log('Adding event listeners to tip select');
-        
-        tipSelect.addEventListener('change', function(e) {
-            console.log('CHANGE event fired, value:', e.target.value);
-            handleInvestmentTypeChange();
+    // Initialize on page load
+    initializeModalForm();
+    
+    // Re-initialize when modal is shown
+    const modal = document.getElementById('yatirimEkleModal');
+    if (modal) {
+        modal.addEventListener('shown.bs.modal', function() {
+            console.log('Modal shown, re-initializing form...');
+            setTimeout(initializeModalForm, 100); // Small delay to ensure DOM is ready
         });
-        
-        tipSelect.addEventListener('input', function(e) {
-            console.log('INPUT event fired, value:', e.target.value);
-            handleInvestmentTypeChange();
-        });
-        
-        // Initial call to set correct state
-        console.log('Making initial call to handleInvestmentTypeChange');
-        handleInvestmentTypeChange();
-    } else {
-        console.log('ERROR: tip select element not found!');
     }
 });
 
