@@ -405,15 +405,11 @@ const investmentCodes = {
 };
 
 function updateCodePlaceholder(event) {
-    console.log('updateCodePlaceholder called'); // Debug log
     const tipSelect = document.getElementById('tip');
-    const tip = tipSelect ? tipSelect.value : '';
+    const tip = event && event.target ? event.target.value : (tipSelect ? tipSelect.value : '');
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
-    
-    console.log('Selected tip:', tip); // Debug log
-    console.log('Tip element found:', !!tipSelect); // Debug log
     
     const ornekler = {
         'fon': {
@@ -435,21 +431,19 @@ function updateCodePlaceholder(event) {
     };
     
     if (tip && ornekler[tip]) {
-        console.log('Enabling code input for:', tip); // Debug log
         kodInput.placeholder = ornekler[tip].placeholder;
         kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
         kodOrnekleri.style.display = 'block';
         if (validateBtn) validateBtn.style.display = 'block';
         
-        // Multiple ways to enable the input
+        // Enable the input field
         kodInput.disabled = false;
         kodInput.removeAttribute('disabled');
         kodInput.removeAttribute('readonly');
         kodInput.readOnly = false;
-        
-        console.log('Code input enabled, disabled status:', kodInput.disabled); // Debug log
+        kodInput.style.backgroundColor = '';
+        kodInput.style.cursor = '';
     } else {
-        console.log('Disabling code input'); // Debug log
         kodInput.placeholder = 'Önce yatırım tipi seçin...';
         kodOrnekleri.style.display = 'none';
         if (validateBtn) validateBtn.style.display = 'none';
@@ -487,11 +481,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener to investment type select
     const tipSelect = document.getElementById('tip');
     if (tipSelect) {
-        console.log('Adding event listener to tip select'); // Debug log
         tipSelect.addEventListener('change', function(e) {
-            console.log('Change event fired, value:', e.target.value); // Debug log
             updateCodePlaceholder(e);
         });
+        
+        // Also trigger on load if there's already a value
+        if (tipSelect.value) {
+            updateCodePlaceholder();
+        }
     }
 });
 
