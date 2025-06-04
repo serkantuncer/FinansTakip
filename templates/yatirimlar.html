@@ -539,19 +539,33 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tipSelect) {
             console.log('Adding event listeners to tip select');
             
-            // Remove existing listeners to avoid duplicates
-            tipSelect.removeEventListener('change', handleInvestmentTypeChange);
-            tipSelect.removeEventListener('input', handleInvestmentTypeChange);
-            
-            tipSelect.addEventListener('change', function(e) {
-                console.log('CHANGE event fired, value:', e.target.value);
+            // Remove existing listeners to avoid duplicates and try multiple event types
+            const changeHandler = function(e) {
+                console.log('SELECT CHANGED! Event type:', e.type, 'value:', e.target.value);
                 handleInvestmentTypeChange();
+            };
+            
+            // Remove any existing listeners
+            tipSelect.removeEventListener('change', changeHandler);
+            tipSelect.removeEventListener('input', changeHandler);
+            tipSelect.removeEventListener('click', changeHandler);
+            
+            // Add multiple event listeners
+            tipSelect.addEventListener('change', changeHandler);
+            tipSelect.addEventListener('input', changeHandler);
+            tipSelect.addEventListener('click', function(e) {
+                // Delay to allow select to update
+                setTimeout(() => {
+                    console.log('SELECT CLICKED! Current value:', tipSelect.value);
+                    handleInvestmentTypeChange();
+                }, 10);
             });
             
-            tipSelect.addEventListener('input', function(e) {
-                console.log('INPUT event fired, value:', e.target.value);
+            // Add listener using old-school method as backup
+            tipSelect.onchange = function() {
+                console.log('ONCHANGE fired! Value:', this.value);
                 handleInvestmentTypeChange();
-            });
+            };
             
             // Initial call to set correct state
             console.log('Making initial call to handleInvestmentTypeChange');
