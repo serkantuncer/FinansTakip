@@ -777,7 +777,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function searchCodes(query) {
     console.log('=== SEARCH CODES CALLED ===');
-    const tip = document.getElementById('tip').value;
+    // Get the tip from the modal specifically, not the page search form
+    const modalTipSelect = document.querySelector('#yatirimEkleModal #tip');
+    const tip = modalTipSelect ? modalTipSelect.value : '';
     const searchResults = document.getElementById('searchResults');
     
     console.log('Search query:', query, 'Type:', tip);
@@ -826,7 +828,9 @@ function selectCode(kod, isim) {
 }
 
 function validateCode() {
-    const tip = document.getElementById('tip').value;
+    // Get the tip from the modal specifically, not the page search form
+    const modalTipSelect = document.querySelector('#yatirimEkleModal #tip');
+    const tip = modalTipSelect ? modalTipSelect.value : '';
     const kod = document.getElementById('kod').value.toUpperCase();
     const kodSonuc = document.getElementById('kodSonuc');
     
