@@ -210,10 +210,10 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="tip" class="form-label">Yatırım Tipi *</label>
-                            <select class="form-select" id="tip" name="tip" required>
+                            <select class="form-select" id="tip" name="tip" required onchange="updateCodePlaceholder()">
                                 <option value="">Seçiniz</option>
-                                <option value="fon">Fon</option>
-                                <option value="hisse">Hisse</option>
+                                <option value="fon">Yatırım Fonu</option>
+                                <option value="hisse">Hisse Senedi</option>
                                 <option value="altin">Altın</option>
                                 <option value="doviz">Döviz</option>
                             </select>
@@ -221,7 +221,9 @@
                         <div class="col-md-6 mb-3">
                             <label for="kod" class="form-label">Kod *</label>
                             <input type="text" class="form-control" id="kod" name="kod" required
-                                   placeholder="örn: AKFON, THYAO, GA, USD">
+                                   placeholder="Yatırım tipi seçin..." onchange="validateAndFillCode()">
+                            <div id="kodOrnekleri" class="form-text" style="display: none;"></div>
+                            <div id="kodSonuc" class="mt-2" style="display: none;"></div>
                         </div>
                     </div>
                     <div class="row">
@@ -243,8 +245,16 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="kategori" class="form-label">Kategori</label>
-                            <input type="text" class="form-control" id="kategori" name="kategori"
-                                   placeholder="örn: Emeklilik, Acil Durum">
+                            <select class="form-select" id="kategori" name="kategori">
+                                <option value="">Kategori Seçin</option>
+                                <option value="Emeklilik">Emeklilik</option>
+                                <option value="Acil Durum">Acil Durum</option>
+                                <option value="Uzun Vadeli">Uzun Vadeli</option>
+                                <option value="Kısa Vadeli">Kısa Vadeli</option>
+                                <option value="Spekülatif">Spekülatif</option>
+                                <option value="Güvenli Liman">Güvenli Liman</option>
+                                <option value="Diğer">Diğer</option>
+                            </select>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -344,6 +354,103 @@ document.addEventListener('DOMContentLoaded', function() {
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
+});
+
+function updateCodePlaceholder() {
+    const tip = document.getElementById('tip').value;
+    const kodInput = document.getElementById('kod');
+    const kodOrnekleri = document.getElementById('kodOrnekleri');
+    
+    const ornekler = {
+        'fon': {
+            placeholder: 'Fon kodu girin (örn: ZBJ)',
+            ornekler: 'Örnek: ZBJ, APK, AEF, AFT, AHF (TEFAŞ kodları)'
+        },
+        'hisse': {
+            placeholder: 'Hisse kodu girin (örn: THYAO)',
+            ornekler: 'Örnek: THYAO, GARAN, ASELS, SISE, BIMAS (BIST kodları)'
+        },
+        'altin': {
+            placeholder: 'Altın türü girin (örn: GA)',
+            ornekler: 'Örnek: GA (Gram Altın), C (Çeyrek), Y (Yarım), T (Tam), ONS (Ons)'
+        },
+        'doviz': {
+            placeholder: 'Döviz kodu girin (örn: USD)',
+            ornekler: 'Örnek: USD, EUR, GBP (TCMB para birimleri)'
+        }
+    };
+    
+    if (tip && ornekler[tip]) {
+        kodInput.placeholder = ornekler[tip].placeholder;
+        kodOrnekleri.textContent = ornekler[tip].ornekler;
+        kodOrnekleri.style.display = 'block';
+    } else {
+        kodInput.placeholder = 'Yatırım tipi seçin...';
+        kodOrnekleri.style.display = 'none';
+    }
+    
+    // Clear previous results
+    document.getElementById('kodSonuc').style.display = 'none';
+    kodInput.value = '';
+    document.getElementById('alis_fiyati').value = '';
+}
+
+function validateAndFillCode() {
+    const tip = document.getElementById('tip').value;
+    const kod = document.getElementById('kod').value.toUpperCase();
+    const kodSonuc = document.getElementById('kodSonuc');
+    
+    if (!tip || !kod) return;
+    
+    // Update the input to uppercase
+    document.getElementById('kod').value = kod;
+    
+    // Make AJAX request to validate and get current price
+    fetch('/api/yatirim_dogrula', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            tip: tip,
+            kod: kod
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            kodSonuc.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>${data.isim}</strong><br>
+                    Güncel Fiyat: ₺${data.guncel_fiyat.toFixed(6)}
+                </div>
+            `;
+            kodSonuc.style.display = 'block';
+            document.getElementById('alis_fiyati').value = data.guncel_fiyat.toFixed(6);
+        } else {
+            kodSonuc.innerHTML = `
+                <div class="alert alert-warning">
+                    Kod doğrulanamadı: ${data.error}
+                </div>
+            `;
+            kodSonuc.style.display = 'block';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        kodSonuc.innerHTML = `
+            <div class="alert alert-danger">
+                Kod doğrulama sırasında hata oluştu.
+            </div>
+        `;
+        kodSonuc.style.display = 'block';
+    });
+}
+
+// Set today's date as default
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('alis_tarihi').value = today;
 });
 </script>
 {% endblock %}

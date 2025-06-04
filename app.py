@@ -73,21 +73,9 @@ app.config['SESSION_COOKIE_SECURE'] = False  # Allow cookies over HTTP for devel
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-# Database configuration - use PostgreSQL from environment
-database_url = os.environ.get("DATABASE_URL")
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+# Database configuration - use SQLite
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{get_writable_db_path()}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "pool_recycle": 300,
-    "pool_pre_ping": True,
-    "connect_args": {
-        "sslmode": "prefer",
-        "connect_timeout": 10
-    }
-}
 
 # Import and initialize database from models
 from models import db, User, Yatirim, FiyatGecmisi
@@ -713,6 +701,40 @@ def api_yatirim(yatirim_id):
         return jsonify({'error': 'Bu yatırıma erişim yetkiniz yok'}), 403
     
     return jsonify(yatirim.to_dict())
+
+@app.route('/api/yatirim_dogrula', methods=['POST'])
+@login_required
+def api_yatirim_dogrula():
+    data = request.get_json()
+    tip = data.get('tip')
+    kod = data.get('kod')
+    
+    if not tip or not kod:
+        return jsonify({'success': False, 'error': 'Tip ve kod gerekli'})
+    
+    try:
+        if tip == 'fon':
+            result = tefas_fon_verisi_cek(kod)
+        elif tip == 'hisse':
+            result = bist_hisse_verisi_cek(kod)
+        elif tip == 'altin':
+            result = altin_verisi_cek(kod)
+        elif tip == 'doviz':
+            result = doviz_verisi_cek(kod)
+        else:
+            return jsonify({'success': False, 'error': 'Geçersiz yatırım tipi'})
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'isim': result.get('isim', 'Bilinmeyen'),
+                'guncel_fiyat': float(result.get('guncel_fiyat', 0))
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Veri çekilemedi'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
