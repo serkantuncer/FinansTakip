@@ -456,7 +456,14 @@ const investmentCodes = {
         { kod: 'ZBJ', isim: 'ZİRAAT PORTFÖY BAŞAK PARA PİYASASI (TL) FONU' },
         { kod: 'APK', isim: 'AKBANK PORTFÖY HİSSE SENEDİ FONU' },
         { kod: 'AEF', isim: 'AKBANK PORTFÖY EUROBOND (TL) FONU' },
-        { kod: 'AFT', isim: 'AKBANK PORTFÖY FLEKSİBEL FON SERİSİ 2' }
+        { kod: 'AFT', isim: 'AKBANK PORTFÖY FLEKSİBEL FON SERİSİ 2' },
+        { kod: 'IRY', isim: 'İŞ PORTFÖY RİSKSİZ YATIRIM FONU' },
+        { kod: 'GAP', isim: 'GARANTİ PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'HPP', isim: 'HSBC PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'YPP', isim: 'YAPI KREDİ PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'VPP', isim: 'VEKİLETEN PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'FPP', isim: 'FİNANSBANK PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'DPP', isim: 'DENİZBANK PORTFÖY PARA PİYASASI FONU' }
     ],
     'hisse': [
         { kod: 'THY', isim: 'TÜRK HAVA YOLLARI A.O.' },
@@ -466,7 +473,15 @@ const investmentCodes = {
         { kod: 'GARAN', isim: 'GARANTİ BANKASI A.Ş.' },
         { kod: 'ASELS', isim: 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.' },
         { kod: 'SISE', isim: 'ŞİŞE VE CAM FABRİKALARI A.Ş.' },
-        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' }
+        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
+        { kod: 'CWENE', isim: 'CENGIZ ENERJİ ELEKTRİK ÜRETİM A.Ş.' },
+        { kod: 'AKBNK', isim: 'AKBANK T.A.Ş.' },
+        { kod: 'ISCTR', isim: 'TÜRK EKONOMİ BANKASI A.Ş.' },
+        { kod: 'HALKB', isim: 'HALKBANK A.Ş.' },
+        { kod: 'VAKBN', isim: 'VEKİLETEN BANKASI A.Ş.' },
+        { kod: 'YKBNK', isim: 'YAPI KREDİ BANKASI A.Ş.' },
+        { kod: 'ARCLK', isim: 'ARÇELİK A.Ş.' },
+        { kod: 'KCHOL', isim: 'KOÇ HOLDİNG A.Ş.' }
     ],
     'altin': [
         { kod: 'GA', isim: 'Gram Altın' },
@@ -982,9 +997,18 @@ function validateCode() {
                     <strong>${foundCode.isim}</strong><br>
                     Güncel fiyat alınamadı: ${data.error}<br>
                     <small class="text-muted">Manuel fiyat girmeniz gerekebilir.</small>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
                 </div>
             `;
+            
+            // Auto-dismiss after 10 seconds
+            setTimeout(() => {
+                const alert = kodSonuc.querySelector('.alert');
+                if (alert) {
+                    alert.classList.remove('show');
+                    setTimeout(() => kodSonuc.style.display = 'none', 300);
+                }
+            }, 10000);
         }
         kodSonuc.style.display = 'block';
     })

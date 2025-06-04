@@ -96,45 +96,84 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Varlık Tipi</th>
-                                    <th>Güncel Değer</th>
-                                    <th>Maliyet</th>
-                                    <th>Kâr/Zarar (₺)</th>
-                                    <th>Kâr/Zarar (%)</th>
-                                    <th>Ağırlık</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for tip_data in tip_ozet %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-secondary">{{ tip_data.tip|title }}</span>
-                                    </td>
-                                    <td>₺{{ "{:,.2f}".format(tip_data.guncel_deger) }}</td>
-                                    <td>₺{{ "{:,.2f}".format(tip_data.maliyet) }}</td>
-                                    <td class="{% if tip_data.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                        ₺{{ "{:+,.2f}".format(tip_data.kar_zarar) }}
-                                    </td>
-                                    <td class="{% if tip_data.kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                        {{ "{:+.2f}".format(tip_data.kar_zarar_yuzde) }}%
-                                    </td>
-                                    <td>
-                                        <div class="progress" style="height: 20px;">
+                    <!-- Desktop Table View -->
+                    <div class="d-none d-lg-block">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Varlık Tipi</th>
+                                        <th>Güncel Değer</th>
+                                        <th>Maliyet</th>
+                                        <th>Kâr/Zarar</th>
+                                        <th>Ağırlık</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for tip_data in tip_ozet %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ tip_data.tip|title }}</span>
+                                        </td>
+                                        <td>₺{{ "{:,.2f}".format(tip_data.guncel_deger) }}</td>
+                                        <td>₺{{ "{:,.2f}".format(tip_data.maliyet) }}</td>
+                                        <td class="{% if tip_data.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            ₺{{ "{:+,.2f}".format(tip_data.kar_zarar) }}
+                                            <br><small>({{ "{:+.2f}".format(tip_data.kar_zarar_yuzde) }}%)</small>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar" role="progressbar" 
+                                                     style="width: {{ tip_data.agirlik }}%"
+                                                     aria-valuenow="{{ tip_data.agirlik }}" aria-valuemin="0" aria-valuemax="100">
+                                                    {{ "{:.1f}".format(tip_data.agirlik) }}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Mobile/Tablet Card View -->
+                    <div class="d-lg-none">
+                        {% for tip_data in tip_ozet %}
+                        <div class="card mb-3 border-0 border-bottom">
+                            <div class="card-body py-3">
+                                <div class="row align-items-center">
+                                    <div class="col-6">
+                                        <span class="badge bg-secondary mb-2">{{ tip_data.tip|title }}</span>
+                                        <h6 class="mb-1">₺{{ "{:,.2f}".format(tip_data.guncel_deger) }}</h6>
+                                        <small class="text-muted">Güncel Değer</small>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <div class="{% if tip_data.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                            ₺{{ "{:+,.2f}".format(tip_data.kar_zarar) }}
+                                        </div>
+                                        <small class="{% if tip_data.kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            {{ "{:+.2f}".format(tip_data.kar_zarar_yuzde) }}%
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Maliyet: ₺{{ "{:,.2f}".format(tip_data.maliyet) }}</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="progress" style="height: 15px;">
                                             <div class="progress-bar" role="progressbar" 
                                                  style="width: {{ tip_data.agirlik }}%"
                                                  aria-valuenow="{{ tip_data.agirlik }}" aria-valuemin="0" aria-valuemax="100">
-                                                {{ "{:.1f}".format(tip_data.agirlik) }}%
+                                                <small>{{ "{:.1f}".format(tip_data.agirlik) }}%</small>
                                             </div>
                                         </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -200,40 +239,80 @@
                 </div>
                 <div class="card-body">
                     {% if performans_siralamasi %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Sıra</th>
-                                        <th>Kod</th>
-                                        <th>İsim</th>
-                                        <th>Tip</th>
-                                        <th>Getiri (%)</th>
-                                        <th>Kâr/Zarar (₺)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for i, yatirim in performans_siralamasi %}
-                                    <tr>
-                                        <td>
-                                            {% if loop.index <= 3 %}
-                                                <i class="fas fa-medal text-warning"></i>
-                                            {% endif %}
-                                            {{ loop.index }}
-                                        </td>
-                                        <td><strong>{{ yatirim.kod }}</strong></td>
-                                        <td>{{ yatirim.isim[:30] + '...' if yatirim.isim and yatirim.isim|length > 30 else yatirim.isim or '-' }}</td>
-                                        <td><span class="badge bg-secondary">{{ yatirim.tip|title }}</span></td>
-                                        <td class="{% if yatirim.getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                            {{ "{:+.2f}".format(yatirim.getiri) }}%
-                                        </td>
-                                        <td class="{% if yatirim.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                            ₺{{ "{:+,.2f}".format(yatirim.kar_zarar) }}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                        <!-- Desktop Table View -->
+                        <div class="d-none d-lg-block">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Sıra</th>
+                                            <th>Kod</th>
+                                            <th>İsim</th>
+                                            <th>Tip</th>
+                                            <th>Getiri</th>
+                                            <th>Kâr/Zarar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for i, yatirim in performans_siralamasi %}
+                                        <tr>
+                                            <td>
+                                                {% if loop.index <= 3 %}
+                                                    <i class="fas fa-medal text-warning me-1"></i>
+                                                {% endif %}
+                                                {{ loop.index }}
+                                            </td>
+                                            <td><strong>{{ yatirim.kod }}</strong></td>
+                                            <td>{{ yatirim.isim[:25] + '...' if yatirim.isim and yatirim.isim|length > 25 else yatirim.isim or '-' }}</td>
+                                            <td><span class="badge bg-secondary">{{ yatirim.tip|title }}</span></td>
+                                            <td class="{% if yatirim.getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ "{:+.2f}".format(yatirim.getiri) }}%
+                                            </td>
+                                            <td class="{% if yatirim.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ₺{{ "{:+,.2f}".format(yatirim.kar_zarar) }}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Mobile/Tablet Card View -->
+                        <div class="d-lg-none">
+                            {% for i, yatirim in performans_siralamasi %}
+                            <div class="card mb-2 border-0 border-bottom">
+                                <div class="card-body py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-2 text-center">
+                                            <div class="fw-bold">
+                                                {% if loop.index <= 3 %}
+                                                    <i class="fas fa-medal text-warning"></i>
+                                                {% endif %}
+                                                {{ loop.index }}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <strong class="text-primary me-2">{{ yatirim.kod }}</strong>
+                                                <span class="badge bg-secondary">{{ yatirim.tip|title }}</span>
+                                            </div>
+                                            <small class="text-muted d-block text-truncate" title="{{ yatirim.isim or 'İsim yok' }}">
+                                                {{ yatirim.isim[:30] + '...' if yatirim.isim and yatirim.isim|length > 30 else yatirim.isim or '-' }}
+                                            </small>
+                                        </div>
+                                        <div class="col-4 text-end">
+                                            <div class="{% if yatirim.getiri >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                                {{ "{:+.2f}".format(yatirim.getiri) }}%
+                                            </div>
+                                            <small class="{% if yatirim.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ₺{{ "{:+,.0f}".format(yatirim.kar_zarar) }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
                         </div>
                     {% else %}
                         <div class="text-center py-4">
