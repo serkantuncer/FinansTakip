@@ -776,22 +776,31 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function searchCodes(query) {
+    console.log('=== SEARCH CODES CALLED ===');
     const tip = document.getElementById('tip').value;
     const searchResults = document.getElementById('searchResults');
     
+    console.log('Search query:', query, 'Type:', tip);
+    console.log('SearchResults element:', !!searchResults);
+    
     if (!tip || query.length < 1) {
-        searchResults.style.display = 'none';
+        console.log('No type or query too short, hiding results');
+        if (searchResults) searchResults.style.display = 'none';
         return;
     }
     
     const codes = investmentCodes[tip] || [];
+    console.log('Available codes for type', tip, ':', codes.length, codes);
+    
     const filteredCodes = codes.filter(item => 
         item.kod.toLowerCase().includes(query.toLowerCase()) ||
         item.isim.toLowerCase().includes(query.toLowerCase())
     );
     
+    console.log('Filtered codes:', filteredCodes.length, filteredCodes);
+    
     if (filteredCodes.length > 0) {
-        searchResults.innerHTML = filteredCodes.map(item => `
+        const html = filteredCodes.map(item => `
             <a href="#" class="list-group-item list-group-item-action" onclick="selectCode('${item.kod}', '${item.isim}')">
                 <div class="d-flex w-100 justify-content-between">
                     <h6 class="mb-1">${item.kod}</h6>
@@ -800,8 +809,12 @@ function searchCodes(query) {
                 <p class="mb-1">${item.isim}</p>
             </a>
         `).join('');
+        
+        console.log('Setting HTML and showing results');
+        searchResults.innerHTML = html;
         searchResults.style.display = 'block';
     } else {
+        console.log('No matches found, hiding results');
         searchResults.style.display = 'none';
     }
 }
