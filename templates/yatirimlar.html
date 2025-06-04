@@ -220,9 +220,19 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="kod" class="form-label">Kod *</label>
-                            <input type="text" class="form-control" id="kod" name="kod" required
-                                   placeholder="Yatırım tipi seçin..." onchange="validateAndFillCode()">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="kod" name="kod" required
+                                       placeholder="Yatırım tipi seçin..." 
+                                       oninput="searchCodes(this.value)" 
+                                       onblur="validateCode()"
+                                       autocomplete="off">
+                                <button type="button" class="btn btn-outline-secondary" id="validateBtn" 
+                                        onclick="validateCode()" style="display: none;">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
                             <div id="kodOrnekleri" class="form-text" style="display: none;"></div>
+                            <div id="searchResults" class="list-group position-absolute" style="display: none; z-index: 1000; max-height: 200px; overflow-y: auto; width: 100%;"></div>
                             <div id="kodSonuc" class="mt-2" style="display: none;"></div>
                         </div>
                     </div>
@@ -356,54 +366,161 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Predefined investment codes for search
+const investmentCodes = {
+    'fon': [
+        { kod: 'ZBJ', isim: 'ZİRAAT PORTFÖY BAŞAK PARA PİYASASI (TL) FONU' },
+        { kod: 'APK', isim: 'AKBANK PORTFÖY HİSSE SENEDİ FONU' },
+        { kod: 'AEF', isim: 'AKBANK PORTFÖY EUROBOND (TL) FONU' },
+        { kod: 'AFT', isim: 'AKBANK PORTFÖY FLEKSİBEL FON SERİSİ 2' },
+        { kod: 'AHF', isim: 'AKBANK PORTFÖY HİSSE SENEDİ FONU' },
+        { kod: 'TEB', isim: 'TEB PORTFÖY HİSSE SENEDİ FONU' },
+        { kod: 'YAS', isim: 'YAPI KREDİ PORTFÖY A TİPİ SERBEST FON' }
+    ],
+    'hisse': [
+        { kod: 'THYAO', isim: 'TÜRK HAVA YOLLARI A.O.' },
+        { kod: 'GARAN', isim: 'GARANTİ BANKASI A.Ş.' },
+        { kod: 'ASELS', isim: 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.' },
+        { kod: 'SISE', isim: 'ŞİŞE VE CAM FABRİKALARI A.Ş.' },
+        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
+        { kod: 'AKBNK', isim: 'AKBANK T.A.Ş.' },
+        { kod: 'ISCTR', isim: 'İŞ BANKASI (C) A.Ş.' }
+    ],
+    'altin': [
+        { kod: 'GA', isim: 'Gram Altın' },
+        { kod: 'C', isim: 'Çeyrek Altın' },
+        { kod: 'Y', isim: 'Yarım Altın' },
+        { kod: 'T', isim: 'Tam Altın' },
+        { kod: 'ONS', isim: 'Ons Altın' }
+    ],
+    'doviz': [
+        { kod: 'USD', isim: 'Amerikan Doları' },
+        { kod: 'EUR', isim: 'Euro' },
+        { kod: 'GBP', isim: 'İngiliz Sterlini' },
+        { kod: 'CHF', isim: 'İsviçre Frangı' },
+        { kod: 'JPY', isim: 'Japon Yeni' }
+    ]
+};
+
 function updateCodePlaceholder() {
     const tip = document.getElementById('tip').value;
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
+    const validateBtn = document.getElementById('validateBtn');
     
     const ornekler = {
         'fon': {
-            placeholder: 'Fon kodu girin (örn: ZBJ)',
-            ornekler: 'Örnek: ZBJ, APK, AEF, AFT, AHF (TEFAŞ kodları)'
+            placeholder: 'Fon kodu girin (örn: ZBJ, APK, AEF...)',
+            ornekler: 'Popüler fonlar: ZBJ, APK, AEF, AFT, AHF - Yazmaya başlayın...'
         },
         'hisse': {
-            placeholder: 'Hisse kodu girin (örn: THYAO)',
-            ornekler: 'Örnek: THYAO, GARAN, ASELS, SISE, BIMAS (BIST kodları)'
+            placeholder: 'Hisse kodu girin (örn: THYAO, GARAN...)',
+            ornekler: 'Popüler hisseler: THYAO, GARAN, ASELS, SISE, BIMAS - Yazmaya başlayın...'
         },
         'altin': {
-            placeholder: 'Altın türü girin (örn: GA)',
-            ornekler: 'Örnek: GA (Gram Altın), C (Çeyrek), Y (Yarım), T (Tam), ONS (Ons)'
+            placeholder: 'Altın türü girin (örn: GA, C, Y...)',
+            ornekler: 'Altın türleri: GA (Gram), C (Çeyrek), Y (Yarım), T (Tam), ONS (Ons)'
         },
         'doviz': {
-            placeholder: 'Döviz kodu girin (örn: USD)',
-            ornekler: 'Örnek: USD, EUR, GBP (TCMB para birimleri)'
+            placeholder: 'Döviz kodu girin (örn: USD, EUR...)',
+            ornekler: 'Dövizler: USD, EUR, GBP, CHF, JPY - Yazmaya başlayın...'
         }
     };
     
     if (tip && ornekler[tip]) {
         kodInput.placeholder = ornekler[tip].placeholder;
-        kodOrnekleri.textContent = ornekler[tip].ornekler;
+        kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
         kodOrnekleri.style.display = 'block';
+        validateBtn.style.display = 'block';
+        kodInput.disabled = false;
     } else {
-        kodInput.placeholder = 'Yatırım tipi seçin...';
+        kodInput.placeholder = 'Önce yatırım tipi seçin...';
         kodOrnekleri.style.display = 'none';
+        validateBtn.style.display = 'none';
+        kodInput.disabled = true;
     }
     
     // Clear previous results
     document.getElementById('kodSonuc').style.display = 'none';
+    document.getElementById('searchResults').style.display = 'none';
     kodInput.value = '';
     document.getElementById('alis_fiyati').value = '';
 }
 
-function validateAndFillCode() {
+function searchCodes(query) {
+    const tip = document.getElementById('tip').value;
+    const searchResults = document.getElementById('searchResults');
+    
+    if (!tip || query.length < 1) {
+        searchResults.style.display = 'none';
+        return;
+    }
+    
+    const codes = investmentCodes[tip] || [];
+    const filteredCodes = codes.filter(item => 
+        item.kod.toLowerCase().includes(query.toLowerCase()) ||
+        item.isim.toLowerCase().includes(query.toLowerCase())
+    );
+    
+    if (filteredCodes.length > 0) {
+        searchResults.innerHTML = filteredCodes.map(item => `
+            <a href="#" class="list-group-item list-group-item-action" onclick="selectCode('${item.kod}', '${item.isim}')">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${item.kod}</h6>
+                    <small>${tip.toUpperCase()}</small>
+                </div>
+                <p class="mb-1">${item.isim}</p>
+            </a>
+        `).join('');
+        searchResults.style.display = 'block';
+    } else {
+        searchResults.style.display = 'none';
+    }
+}
+
+function selectCode(kod, isim) {
+    document.getElementById('kod').value = kod;
+    document.getElementById('searchResults').style.display = 'none';
+    validateCode();
+}
+
+function validateCode() {
     const tip = document.getElementById('tip').value;
     const kod = document.getElementById('kod').value.toUpperCase();
     const kodSonuc = document.getElementById('kodSonuc');
     
-    if (!tip || !kod) return;
+    if (!tip || !kod) {
+        kodSonuc.style.display = 'none';
+        return;
+    }
     
     // Update the input to uppercase
     document.getElementById('kod').value = kod;
+    
+    // Check if code exists in predefined list first
+    const codes = investmentCodes[tip] || [];
+    const foundCode = codes.find(item => item.kod === kod);
+    
+    if (!foundCode) {
+        kodSonuc.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Dikkat:</strong> "${kod}" kodu ${tip} listesinde bulunamadı. 
+                Devam etmek istiyorsanız manuel olarak fiyat girmeniz gerekebilir.
+            </div>
+        `;
+        kodSonuc.style.display = 'block';
+        return;
+    }
+    
+    // Show loading
+    kodSonuc.innerHTML = `
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            ${foundCode.isim} için güncel fiyat kontrol ediliyor...
+        </div>
+    `;
+    kodSonuc.style.display = 'block';
     
     // Make AJAX request to validate and get current price
     fetch('/api/yatirim_dogrula', {
@@ -421,31 +538,45 @@ function validateAndFillCode() {
         if (data.success) {
             kodSonuc.innerHTML = `
                 <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>
                     <strong>${data.isim}</strong><br>
-                    Güncel Fiyat: ₺${data.guncel_fiyat.toFixed(6)}
+                    <small class="text-muted">Güncel Fiyat:</small> <strong>₺${data.guncel_fiyat.toFixed(6)}</strong>
                 </div>
             `;
-            kodSonuc.style.display = 'block';
             document.getElementById('alis_fiyati').value = data.guncel_fiyat.toFixed(6);
         } else {
             kodSonuc.innerHTML = `
                 <div class="alert alert-warning">
-                    Kod doğrulanamadı: ${data.error}
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>${foundCode.isim}</strong><br>
+                    Güncel fiyat alınamadı: ${data.error}<br>
+                    <small class="text-muted">Manuel fiyat girmeniz gerekebilir.</small>
                 </div>
             `;
-            kodSonuc.style.display = 'block';
         }
+        kodSonuc.style.display = 'block';
     })
     .catch(error => {
         console.error('Error:', error);
         kodSonuc.innerHTML = `
             <div class="alert alert-danger">
-                Kod doğrulama sırasında hata oluştu.
+                <i class="fas fa-times-circle me-2"></i>
+                Kod doğrulama sırasında hata oluştu. Lütfen tekrar deneyin.
             </div>
         `;
         kodSonuc.style.display = 'block';
     });
 }
+
+// Hide search results when clicking outside
+document.addEventListener('click', function(event) {
+    const searchResults = document.getElementById('searchResults');
+    const kodInput = document.getElementById('kod');
+    
+    if (!searchResults.contains(event.target) && event.target !== kodInput) {
+        searchResults.style.display = 'none';
+    }
+});
 
 // Set today's date as default
 document.addEventListener('DOMContentLoaded', function() {
