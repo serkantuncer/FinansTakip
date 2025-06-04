@@ -309,8 +309,13 @@ def altin_verisi_cek(altin_turu_kodu):
     altin_turu_kodu_upper = altin_turu_kodu.upper()
     app.logger.info(f"Altın Verisi Çekiliyor (Altinkaynak Manuel SOAP): {altin_turu_kodu_upper} - URL: {service_url}")
 
+    # Try different authentication methods
     username = 'AltinkaynakWebServis'
     password = 'AltinkaynakWebServis'
+    
+    # Check for custom API credentials from environment
+    alt_username = os.environ.get('ALTINKAYNAK_USERNAME', username)
+    alt_password = os.environ.get('ALTINKAYNAK_PASSWORD', password)
 
     altin_tipi_map = {
         'GA': 'Gram Altın',
@@ -401,11 +406,18 @@ def doviz_verisi_cek(doviz_kodu):
     doviz_kodu_upper = doviz_kodu.upper()
     
     try:
-        today = datetime.now()
-        url = f"https://www.tcmb.gov.tr/kurlar/{today.strftime('%Y%m')}/{today.strftime('%d%m%Y')}.xml"
-        
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
+        # Try current date first, then try previous business days
+        for days_back in range(5):  # Try up to 5 days back
+            target_date = datetime.now() - timedelta(days=days_back)
+            url = f"https://www.tcmb.gov.tr/kurlar/{target_date.strftime('%Y%m')}/{target_date.strftime('%d%m%Y')}.xml"
+            
+            app.logger.info(f"Trying TCMB URL: {url}")
+            response = requests.get(url, timeout=15)
+            
+            if response.status_code == 200:
+                break
+            elif days_back == 4:  # Last attempt
+                response.raise_for_status()
         
         root = ET.fromstring(response.content)
         

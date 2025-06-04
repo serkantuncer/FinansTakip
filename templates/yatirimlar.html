@@ -882,20 +882,31 @@ function validateCode() {
     .then(data => {
         if (data.success) {
             kodSonuc.innerHTML = `
-                <div class="alert alert-success">
+                <div class="alert alert-success alert-dismissible fade show">
                     <i class="fas fa-check-circle me-2"></i>
                     <strong>${data.isim}</strong><br>
                     <small class="text-muted">Güncel Fiyat:</small> <strong>₺${data.guncel_fiyat.toFixed(6)}</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `;
             document.getElementById('alis_fiyati').value = data.guncel_fiyat.toFixed(6);
+            
+            // Auto-hide success alert after 5 seconds
+            setTimeout(() => {
+                const alert = kodSonuc.querySelector('.alert');
+                if (alert) {
+                    alert.classList.remove('show');
+                    setTimeout(() => kodSonuc.style.display = 'none', 300);
+                }
+            }, 5000);
         } else {
             kodSonuc.innerHTML = `
-                <div class="alert alert-warning">
+                <div class="alert alert-warning alert-dismissible fade show">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     <strong>${foundCode.isim}</strong><br>
                     Güncel fiyat alınamadı: ${data.error}<br>
                     <small class="text-muted">Manuel fiyat girmeniz gerekebilir.</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `;
         }
