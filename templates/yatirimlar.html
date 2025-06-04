@@ -210,7 +210,7 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="tip" class="form-label">Yatırım Tipi *</label>
-                            <select class="form-select" id="tip" name="tip" required onchange="updateCodePlaceholder()">
+                            <select class="form-select" id="tip" name="tip" required>
                                 <option value="">Seçiniz</option>
                                 <option value="fon">Yatırım Fonu</option>
                                 <option value="hisse">Hisse Senedi</option>
@@ -404,12 +404,15 @@ const investmentCodes = {
     ]
 };
 
-function updateCodePlaceholder(event) {
+function handleInvestmentTypeChange() {
     const tipSelect = document.getElementById('tip');
-    const tip = event && event.target ? event.target.value : (tipSelect ? tipSelect.value : '');
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
+    
+    if (!tipSelect || !kodInput) return;
+    
+    const tip = tipSelect.value;
     
     const ornekler = {
         'fon': {
@@ -431,35 +434,52 @@ function updateCodePlaceholder(event) {
     };
     
     if (tip && ornekler[tip]) {
-        kodInput.placeholder = ornekler[tip].placeholder;
-        kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
-        kodOrnekleri.style.display = 'block';
-        if (validateBtn) validateBtn.style.display = 'block';
-        
-        // Enable the input field
+        // Enable and configure the code input
         kodInput.disabled = false;
         kodInput.removeAttribute('disabled');
-        kodInput.removeAttribute('readonly');
-        kodInput.readOnly = false;
-        kodInput.style.backgroundColor = '';
-        kodInput.style.cursor = '';
+        kodInput.placeholder = ornekler[tip].placeholder;
+        
+        // Show examples
+        if (kodOrnekleri) {
+            kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
+            kodOrnekleri.style.display = 'block';
+        }
+        
+        // Show validate button
+        if (validateBtn) {
+            validateBtn.style.display = 'block';
+        }
     } else {
-        kodInput.placeholder = 'Önce yatırım tipi seçin...';
-        kodOrnekleri.style.display = 'none';
-        if (validateBtn) validateBtn.style.display = 'none';
+        // Disable the code input
         kodInput.disabled = true;
         kodInput.setAttribute('disabled', 'disabled');
+        kodInput.placeholder = 'Önce yatırım tipi seçin...';
+        
+        // Hide examples
+        if (kodOrnekleri) {
+            kodOrnekleri.style.display = 'none';
+        }
+        
+        // Hide validate button
+        if (validateBtn) {
+            validateBtn.style.display = 'none';
+        }
     }
     
-    // Clear previous results
+    // Clear previous values and results
+    kodInput.value = '';
     const kodSonuc = document.getElementById('kodSonuc');
     const searchResults = document.getElementById('searchResults');
     const alisFiyati = document.getElementById('alis_fiyati');
     
     if (kodSonuc) kodSonuc.style.display = 'none';
     if (searchResults) searchResults.style.display = 'none';
-    kodInput.value = '';
     if (alisFiyati) alisFiyati.value = '';
+}
+
+// Backward compatibility
+function updateCodePlaceholder() {
+    handleInvestmentTypeChange();
 }
 
 // Initialize on page load
@@ -481,14 +501,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add event listener to investment type select
     const tipSelect = document.getElementById('tip');
     if (tipSelect) {
-        tipSelect.addEventListener('change', function(e) {
-            updateCodePlaceholder(e);
-        });
+        tipSelect.addEventListener('change', handleInvestmentTypeChange);
+        tipSelect.addEventListener('input', handleInvestmentTypeChange);
         
-        // Also trigger on load if there's already a value
-        if (tipSelect.value) {
-            updateCodePlaceholder();
-        }
+        // Initial call to set correct state
+        handleInvestmentTypeChange();
     }
 });
 
