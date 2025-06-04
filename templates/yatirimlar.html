@@ -210,13 +210,19 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="tip" class="form-label">Yatırım Tipi *</label>
-                            <select class="form-select" id="tip" name="tip" required>
-                                <option value="">Seçiniz</option>
-                                <option value="fon">Yatırım Fonu</option>
-                                <option value="hisse">Hisse Senedi</option>
-                                <option value="altin">Altın</option>
-                                <option value="doviz">Döviz</option>
-                            </select>
+                            <div class="input-group">
+                                <select class="form-select" id="tip" name="tip" required onchange="manualTypeChange(this.value)">
+                                    <option value="">Seçiniz</option>
+                                    <option value="fon">Yatırım Fonu</option>
+                                    <option value="hisse">Hisse Senedi</option>
+                                    <option value="altin">Altın</option>
+                                    <option value="doviz">Döviz</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-primary" onclick="forceActivateCodeInput()" title="Kod girişini etkinleştir">
+                                    <i class="fas fa-unlock"></i>
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Eğer kod girişi etkinleşmezse sağdaki butona tıklayın</small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="kod" class="form-label">Kod *</label>
@@ -640,6 +646,36 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
+    }
+    
+    // Manual function called by inline onchange
+    function manualTypeChange(selectedValue) {
+        console.log('>>> MANUAL ONCHANGE CALLED with value:', selectedValue);
+        updateFormBasedOnType(selectedValue);
+    }
+    
+    // Force activation function for the unlock button
+    function forceActivateCodeInput() {
+        console.log('>>> FORCE ACTIVATION BUTTON CLICKED');
+        const tipSelect = document.getElementById('tip');
+        const currentType = tipSelect ? tipSelect.value : '';
+        
+        if (!currentType || currentType === '') {
+            alert('Lütfen önce bir yatırım tipi seçin!');
+            return;
+        }
+        
+        console.log('Forcing activation for type:', currentType);
+        updateFormBasedOnType(currentType);
+        
+        // Extra force enable
+        const kodInput = document.getElementById('kod');
+        if (kodInput) {
+            kodInput.disabled = false;
+            kodInput.removeAttribute('disabled');
+            kodInput.focus();
+            console.log('Code input force-enabled and focused');
+        }
     }
     
     // Initialize on page load
