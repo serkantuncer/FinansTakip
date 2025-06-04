@@ -518,6 +518,104 @@ function updateCodePlaceholder() {
     handleInvestmentTypeChange();
 }
 
+// Global functions for inline handlers
+function manualTypeChange(selectedValue) {
+    console.log('>>> MANUAL ONCHANGE CALLED with value:', selectedValue);
+    updateFormBasedOnType(selectedValue);
+}
+
+function forceActivateCodeInput() {
+    console.log('>>> FORCE ACTIVATION BUTTON CLICKED');
+    const tipSelect = document.getElementById('tip');
+    const currentType = tipSelect ? tipSelect.value : '';
+    
+    if (!currentType || currentType === '') {
+        alert('Lütfen önce bir yatırım tipi seçin!');
+        return;
+    }
+    
+    console.log('Forcing activation for type:', currentType);
+    updateFormBasedOnType(currentType);
+    
+    // Extra force enable
+    const kodInput = document.getElementById('kod');
+    if (kodInput) {
+        kodInput.disabled = false;
+        kodInput.removeAttribute('disabled');
+        kodInput.focus();
+        console.log('Code input force-enabled and focused');
+    }
+}
+
+// Simplified form update function
+function updateFormBasedOnType(selectedType) {
+    console.log('=== UPDATING FORM FOR TYPE:', selectedType, '===');
+    
+    const kodInput = document.getElementById('kod');
+    const kodOrnekleri = document.getElementById('kodOrnekleri');
+    const validateBtn = document.getElementById('validateBtn');
+    
+    if (!kodInput) {
+        console.error('Kod input not found!');
+        return;
+    }
+    
+    if (!selectedType || selectedType === '') {
+        console.log('No type selected, disabling input');
+        kodInput.disabled = true;
+        kodInput.placeholder = "Önce yatırım tipi seçin...";
+        if (kodOrnekleri) kodOrnekleri.style.display = 'none';
+        if (validateBtn) validateBtn.style.display = 'none';
+        return;
+    }
+    
+    // Enable the input and set appropriate placeholder
+    console.log('ENABLING INPUT for type:', selectedType);
+    kodInput.disabled = false;
+    kodInput.removeAttribute('disabled');
+    
+    // Set placeholders and examples based on type
+    const typeConfig = {
+        'fon': {
+            placeholder: 'Örn: TI2, AFA, TLI',
+            examples: 'Örnekler: TI2 (İş Portföy BIST-30), AFA (Ak Portföy Petkim), TLI (Türkiye İş Portföy Likit)'
+        },
+        'hisse': {
+            placeholder: 'Örn: THYAO, ISCTR, GARAN',
+            examples: 'Örnekler: THYAO (Türk Hava Yolları), ISCTR (İş Bankası C), GARAN (Garanti BBVA)'
+        },
+        'altin': {
+            placeholder: 'Örn: GA, C, Y, T',
+            examples: 'Örnekler: GA (Gram Altın), C (Çeyrek Altın), Y (Yarım Altın), T (Tam Altın)'
+        },
+        'doviz': {
+            placeholder: 'Örn: USD, EUR, GBP',
+            examples: 'Örnekler: USD (Amerikan Doları), EUR (Euro), GBP (İngiliz Sterlini)'
+        }
+    };
+    
+    const config = typeConfig[selectedType];
+    if (config) {
+        kodInput.placeholder = config.placeholder;
+        if (kodOrnekleri) {
+            kodOrnekleri.textContent = config.examples;
+            kodOrnekleri.style.display = 'block';
+        }
+    }
+    
+    if (validateBtn) validateBtn.style.display = 'inline-block';
+    
+    // Re-add event handlers to the now-enabled input
+    kodInput.oninput = function() {
+        searchCodes(this.value);
+    };
+    kodInput.onblur = function() {
+        validateCode();
+    };
+    
+    console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Set today's date as default
@@ -646,36 +744,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
-    }
-    
-    // Manual function called by inline onchange
-    function manualTypeChange(selectedValue) {
-        console.log('>>> MANUAL ONCHANGE CALLED with value:', selectedValue);
-        updateFormBasedOnType(selectedValue);
-    }
-    
-    // Force activation function for the unlock button
-    function forceActivateCodeInput() {
-        console.log('>>> FORCE ACTIVATION BUTTON CLICKED');
-        const tipSelect = document.getElementById('tip');
-        const currentType = tipSelect ? tipSelect.value : '';
-        
-        if (!currentType || currentType === '') {
-            alert('Lütfen önce bir yatırım tipi seçin!');
-            return;
-        }
-        
-        console.log('Forcing activation for type:', currentType);
-        updateFormBasedOnType(currentType);
-        
-        // Extra force enable
-        const kodInput = document.getElementById('kod');
-        if (kodInput) {
-            kodInput.disabled = false;
-            kodInput.removeAttribute('disabled');
-            kodInput.focus();
-            console.log('Code input force-enabled and focused');
-        }
     }
     
     // Initialize on page load
