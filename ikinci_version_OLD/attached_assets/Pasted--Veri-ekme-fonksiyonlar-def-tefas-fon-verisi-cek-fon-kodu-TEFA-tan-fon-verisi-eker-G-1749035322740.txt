@@ -1,0 +1,509 @@
+# Veri çekme fonksiyonları
+def tefas_fon_verisi_cek(fon_kodu):
+    """TEFAŞ'tan fon verisi çeker - Güncellenmiş Versiyon"""
+    fon_kodu_upper = fon_kodu.upper()
+    url = f"https://www.tefas.gov.tr/FonAnaliz.aspx?FonKod={fon_kodu_upper}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    }
+    app.logger.info(f"TEFAŞ Verisi Çekiliyor: {fon_kodu_upper} - URL: {url}")
+    
+    try:
+        session = requests.Session()
+        response = session.get(url, headers=headers, timeout=15)
+        
+        if response.status_code != 200:
+            app.logger.warning(f"TEFAŞ sayfası ({fon_kodu_upper}) HTTP {response.status_code} hatası verdi.")
+            return None
+            
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # FON ADI İÇİN OLASI SEÇİCİLER
+        fon_adi = None
+        
+        # 1. İlk seçenek: Önceki seçici
+        fon_adi_element = soup.find('span', {'id': 'MainContent_FormViewMainIndicators_LabelFund'})
+        
+        # 2. İkinci seçenek: Yeni header'dan
+        if not fon_adi_element:
+            fon_adi_element = soup.find('h2', class_='main-indicators-header')
+            
+        # 3. Başlığı al (son çare)
+        if fon_adi_element:
+            fon_adi = fon_adi_element.text.strip()
+        else:
+            fon_adi = soup.title.string if soup.title else f"{fon_kodu_upper} Fonu"
+            # Eğer başlıkta "bulunamadı" benzeri bir ifade varsa, sayfa hata vermiş olabilir
+            if "bulunamadı" in fon_adi.lower():
+                app.logger.warning(f"TEFAŞ sayfasında {fon_kodu_upper} için kayıt bulunamadı görünüyor (başlıktan tespit).")
+                return None
+        
+        # FİYAT İÇİN OLASI SEÇİCİLER
+        # 1. Önceki seçici ile fiyat 
+        fiyat_element = soup.find('span', {'id': 'MainContent_FormViewMainIndicators_LabelPrice'})
+        
+        # 2. Top-list ile fiyat bulma (önceki kodunuzdan)
+        if not fiyat_element:
+            price_list = soup.find('ul', class_='top-list')
+            if price_list:
+                first_item = price_list.find('li')
+                if first_item:
+                    fiyat_element = first_item.find('span')
+        
+        # 3. Ana göstergeler bölümünde fiyat arama
+        if not fiyat_element:
+            main_indicators = soup.find('div', class_='main-indicators')
+            if main_indicators:
+                items = main_indicators.find_all('li')
+                for item in items:
+                    if 'Fiyat' in item.text or 'TL' in item.text:
+                        fiyat_element = item.find('span')
+                        break
+        
+        # Eğer hala fiyat bulunamadıysa en son çare olarak genel sayfa içinde uygun metinleri ara
+        if not fiyat_element:
+            # Tüm span'ları kontrol et, "TL" içeren veya sayısal değer içeren span'ları bul
+            spans = soup.find_all('span')
+            for span in spans:
+                text = span.text.strip()
+                if ('TL' in text) or (',' in text and text.replace(',', '').replace('.', '').isdigit()):
+                    fiyat_element = span
+                    break
+        
+        if not fiyat_element:
+            app.logger.warning(f"TEFAŞ sayfasında {fon_kodu_upper} için fiyat bulunamadı.")
+            return None
+            
+        fiyat_text = fiyat_element.text.strip()
+        app.logger.debug(f"TEFAŞ'tan okunan ham değerler: Ad='{fon_adi}', Fiyat='{fiyat_text}'")
+        
+        # Fiyatı Decimal'e çevir (TL veya diğer birim işaretlerini temizle)
+        fiyat_text = fiyat_text.replace('TL', '').replace('₺', '').strip()
+        
+        try:
+            # Önce binlik ayraçları kaldır, sonra virgülü noktaya çevir
+            fiyat = Decimal(fiyat_text.replace('.', '').replace(',', '.'))
+        except (InvalidOperation, ValueError):
+            app.logger.error(f"TEFAŞ fiyatı ({fon_kodu_upper}) Decimal'e çevrilemedi: '{fiyat_text}'")
+            return None
+            
+        veri = {
+            'isim': fon_adi,
+            'guncel_fiyat': fiyat,
+            'tarih': datetime.now()
+        }
+        app.logger.info(f"TEFAŞ Verisi Başarıyla Çekildi: {fon_kodu_upper} - Veri: {veri}")
+        return veri
+        
+    except requests.exceptions.Timeout:
+        app.logger.error(f"TEFAŞ veri çekme zaman aşımına uğradı ({fon_kodu_upper}): {url}")
+        return None
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"TEFAŞ veri çekme (Request) hatası ({fon_kodu_upper}): {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            app.logger.error(f"TEFAŞ Hata Yanıt Kodu: {e.response.status_code}")
+        return None
+    except Exception as e:
+        app.logger.error(f"TEFAŞ veri çekme (Genel) hatası ({fon_kodu_upper}): {str(e)}", exc_info=True)
+        return None
+
+def bist_hisse_verisi_cek(hisse_kodu):
+    """İş Yatırım'dan hisse verisi çeker"""
+    hisse_kodu_upper = hisse_kodu.upper()
+
+    # Yeni API URL'si (JSON API kullanımı)
+    api_url = f"https://www.isyatirim.com.tr/tr-tr/_layouts/Isyatirim.Website/Common/Data.aspx/OneEndeks?endeks={hisse_kodu_upper}"
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.isyatirim.com.tr/'
+    }
+
+    try:
+        response = requests.get(api_url, headers=headers, timeout=15)
+        response.raise_for_status()
+
+        data = response.json()
+        app.logger.info(f"API'den dönen veri: {data}")  # Veriyi logla
+
+        if isinstance(data, list) and len(data) > 0:
+            hisse_bilgisi = data[0]
+
+            if "last" in hisse_bilgisi and "symbol" in hisse_bilgisi:
+                fiyat_text = hisse_bilgisi["last"]
+                isim = hisse_bilgisi["symbol"]
+
+                fiyat = Decimal(fiyat_text)
+
+                return {
+                    'isim': isim.strip(),
+                    'guncel_fiyat': fiyat,
+                    'tarih': datetime.now()
+                }
+
+        return None
+    except Exception as e:
+        app.logger.error(f"BIST veri çekme hatası: {str(e)}")
+        return None
+
+def altin_verisi_cek(altin_turu_kodu):
+    """Altinkaynak servisine manuel SOAP isteği göndererek altın fiyatlarını çeker."""
+    service_url = 'http://data.altinkaynak.com/DataService.asmx'
+    altin_turu_kodu_upper = altin_turu_kodu.upper()
+    app.logger.info(f"Altın Verisi Çekiliyor (Altinkaynak Manuel SOAP): {altin_turu_kodu_upper} - URL: {service_url}")
+
+    username = 'AltinkaynakWebServis'
+    password = 'AltinkaynakWebServis'
+
+    # XML içindeki 'Aciklama' etiketine göre eşleştirme (YANITTAN ALINAN GERÇEK DEĞERLER!)
+    altin_tipi_map = {
+        'GA': 'Gram Altın',       # XML'deki Açıklama ile eşleşiyor
+        'C': 'Çeyrek Altın',      # XML'deki Açıklama ile eşleşiyor
+        'Y': 'Yarım Altın',       # XML'deki Açıklama ile eşleşiyor
+        'T': 'Teklik Altın',      # XML'deki Açıklama 'Teklik Altın' (Cumhuriyet değil)
+        # 'ONS': 'ONS',           # ONS için XML'de doğrudan eşleşme yok
+    }
+    altin_isim_aranan = altin_tipi_map.get(altin_turu_kodu_upper)
+    if not altin_isim_aranan:
+        app.logger.warning(f"Geçersiz veya eşleşmeyen altın türü kodu: {altin_turu_kodu_upper}")
+        return None
+
+    # SOAP 1.1 İstek XML'ini oluşturma (f-string ile)
+    soap_request_xml = f"""<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header>
+    <AuthHeader xmlns="http://data.altinkaynak.com/">
+      <Username>{username}</Username>
+      <Password>{password}</Password>
+    </AuthHeader>
+  </soap:Header>
+  <soap:Body>
+    <GetGold xmlns="http://data.altinkaynak.com/" />
+  </soap:Body>
+</soap:Envelope>"""
+
+    # HTTP Header'larını ayarlama (SOAP 1.1 için)
+    headers = {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': '"http://data.altinkaynak.com/GetGold"',
+        'Host': 'data.altinkaynak.com'
+    }
+
+    try:
+        # POST isteğini gönderme
+        response = requests.post(service_url, headers=headers, data=soap_request_xml.encode('utf-8'), timeout=20)
+        response.raise_for_status() # HTTP 4xx/5xx hatalarını kontrol et
+
+        # Yanıt XML'ini parse etme
+        try:
+            response_xml_root = ET.fromstring(response.content)
+            namespaces = {
+                'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+                'ak': 'http://data.altinkaynak.com/'
+            }
+            get_gold_result_element = response_xml_root.find('.//soap:Body/ak:GetGoldResponse/ak:GetGoldResult', namespaces)
+
+            if get_gold_result_element is None or get_gold_result_element.text is None:
+                 get_gold_result_element = response_xml_root.find('.//{http://data.altinkaynak.com/}GetGoldResult')
+                 if get_gold_result_element is None or get_gold_result_element.text is None:
+                    app.logger.warning("Altinkaynak yanıt XML'inde GetGoldResult etiketi veya içeriği bulunamadı.")
+                    app.logger.debug(f"Alınan yanıt içeriği (ilk 500kr): {response.text[:500]}")
+                    if "Nesne başvurusu" in response.text:
+                        app.logger.error("Altinkaynak servisi 'Nesne başvurusu' hatası döndürdü (yetkilendirme hatası olabilir)")
+                    return None
+
+            inner_xml_string = get_gold_result_element.text
+            # TAM YANITI LOGLA (DEBUG İÇİN) - Eğer çok uzunsa sorun olabilir, gerekirse kısaltılabilir.
+            app.logger.debug(f"Altinkaynak GetGoldResult İçerik Stringi (ilk 1000kr): {inner_xml_string[:1000]}...") # İlk 1000 karakter daha güvenli
+
+            # --- Bu string'i de XML olarak parse et ---
+            try:
+                inner_root = ET.fromstring(inner_xml_string)
+                app.logger.debug(f"Inner XML root tag adı: '{inner_root.tag}'") # Beklenen: Kurlar
+                altin_bulundu = False
+
+                # Inner XML içindeki altın kayıtlarını bul (Yapı: <Kur>...</Kur>)
+                kur_elements = inner_root.findall('./Kur') # Doğrudan root altındaki Kur'ları ara
+                app.logger.debug(f"Toplam {len(kur_elements)} adet <Kur> elementi bulundu.")
+
+                for i, kur_element in enumerate(kur_elements):
+                    aciklama_raw = kur_element.findtext('Aciklama')
+                    satis_str = kur_element.findtext('Satis')
+                    log_prefix = f"[Kur {i+1}/{len(kur_elements)}]"
+
+                    if aciklama_raw and satis_str:
+                        aciklama_clean = aciklama_raw.strip()
+                        aranan_lower = altin_isim_aranan.lower()
+                        bulunan_lower = aciklama_clean.lower()
+                        eslesme_sonucu = (aranan_lower == bulunan_lower)
+
+                        app.logger.debug(f"{log_prefix} Aciklama Raw: '{aciklama_raw}', Clean: '{aciklama_clean}', Satis: '{satis_str}'")
+                        app.logger.debug(f"{log_prefix} KARŞILAŞTIRMA: Aranan (lower): '{aranan_lower}', Bulunan (lower): '{bulunan_lower}', SONUÇ (==): {eslesme_sonucu}")
+
+                        if eslesme_sonucu: # Tam eşleşme kontrolü
+                            try:
+                                fiyat = Decimal(satis_str.replace(',', '.'))
+                            except (InvalidOperation, TypeError) as e_decimal:
+                                app.logger.error(f"{log_prefix} Altinkaynak Inner XML fiyatı ('{aciklama_clean}') çevirme hatası: '{satis_str}', Hata: {e_decimal}")
+                                continue # Sonraki kayda geç
+
+                            veri = {
+                                'isim': aciklama_clean,
+                                'guncel_fiyat': fiyat,
+                                'tarih': datetime.now()
+                            }
+                            app.logger.info(f"Altinkaynak Altın Verisi (Manuel SOAP) Başarıyla Çekildi: {altin_turu_kodu_upper} ({aciklama_clean}) - Fiyat: {fiyat}")
+                            altin_bulundu = True
+                            return veri # Eşleşme bulundu, döngüden ve fonksiyondan çık
+                    else:
+                         app.logger.warning(f"{log_prefix} Aciklama veya Satis etiketi bulunamadı veya boş.")
+
+                # Eğer döngü bittiyse ve altın bulunamadıysa
+                if not altin_bulundu:
+                    app.logger.warning(f"Döngü bitti. Altinkaynak Inner XML içinde aranan altın türü bulunamadı: '{altin_isim_aranan}' (Kod: {altin_turu_kodu_upper})")
+                    return None
+                
+            except ET.ParseError as e:
+                app.logger.error(f"Altın veri XML'i parse edilemedi: {str(e)}")
+                app.logger.debug(f"Parse edilemeyen XML: {inner_xml_string[:200]}")
+                return None
+                
+        except ET.ParseError as e:
+            app.logger.error(f"SOAP yanıt XML'i parse edilemedi: {str(e)}")
+            app.logger.debug(f"Parse edilemeyen yanıt: {response.text[:200]}")
+            return None
+            
+    except requests.exceptions.Timeout:
+         app.logger.error(f"Altinkaynak Manuel SOAP isteği zaman aşımına uğradı ({altin_turu_kodu_upper}).")
+         return None
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Altinkaynak Manuel SOAP isteği hatası ({altin_turu_kodu_upper}): {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+             app.logger.error(f"Altinkaynak Hata Yanıt Kodu: {e.response.status_code}, Yanıt: {e.response.text[:200]}")
+             if "Nesne başvurusu" in e.response.text:
+                  app.logger.error("Altinkaynak sunucusu hala 'Nesne Başvurusu' hatası veriyor (HTTP Hata Kodu üzerinden).")
+        return None
+    except Exception as e:
+        app.logger.error(f"Altinkaynak Altın verisi çekme (Manuel SOAP Genel) hatası ({altin_turu_kodu_upper}): {str(e)}", exc_info=True)
+        return None
+
+def doviz_verisi_cek(doviz_kodu):
+    """TCMB API'sinden döviz verisi çeker"""
+    doviz_kodu_upper = doviz_kodu.upper()
+    
+    # TCMB XML servisi
+    url = "https://www.tcmb.gov.tr/kurlar/today.xml"
+    
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code != 200:
+            app.logger.warning(f"TCMB döviz verisi HTTP {response.status_code} hatası verdi.")
+            return None
+        
+        # XML'i parse et
+        root = ET.fromstring(response.content)
+        
+        # Döviz kodlarını kontrol et
+        for currency in root.findall('.//Currency'):
+            curr_code = currency.get('CurrencyCode')
+            if curr_code == doviz_kodu_upper:
+                # Döviz ismi
+                isim = currency.find('CurrencyName').text
+                
+                # Alış fiyatı (ForexBuying) al
+                fiyat_element = currency.find('ForexBuying')
+                if fiyat_element is not None and fiyat_element.text:
+                    try:
+                        # Nokta ile ayrılmış ondalıklı sayıyı Decimal'e çevir
+                        fiyat = Decimal(fiyat_element.text)
+                        
+                        return {
+                            'isim': isim,
+                            'guncel_fiyat': fiyat,
+                            'tarih': datetime.now()
+                        }
+                    except (InvalidOperation, ValueError) as e:
+                        app.logger.error(f"TCMB döviz fiyatı Decimal'e çevrilemedi: {str(e)} - Veri: {fiyat_element.text}")
+                        return None
+        
+        app.logger.warning(f"TCMB verilerinde {doviz_kodu_upper} kodu bulunamadı.")
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"TCMB döviz verisi çekme hatası: {str(e)}")
+        return None
+
+def yatirim_verisi_guncelle(yatirim):
+    """Yatırım verisini türüne göre günceller"""
+    if yatirim.tip == 'fon':
+        veri = tefas_fon_verisi_cek(yatirim.kod)
+    elif yatirim.tip == 'hisse':
+        veri = bist_hisse_verisi_cek(yatirim.kod)
+    elif yatirim.tip == 'altin':
+        veri = altin_verisi_cek(yatirim.kod)
+    elif yatirim.tip == 'doviz':
+        veri = doviz_verisi_cek(yatirim.kod)
+    else:
+        app.logger.error(f"Bilinmeyen yatırım tipi: {yatirim.tip}")
+        return False
+    
+    if veri:
+        # Güncel fiyatı kaydet
+        yatirim.guncel_fiyat = veri['guncel_fiyat']
+        yatirim.son_guncelleme = veri['tarih']
+        
+        # İsim boşsa veya en az 3 karakter kısaysa, gelen ismi kaydet
+        if not yatirim.isim or (len(yatirim.isim) < 3 and len(veri['isim']) >= 3):
+            yatirim.isim = veri['isim']
+        
+        # Fiyat geçmişine ekle (en son fiyat değişmişse)
+        son_kayit = FiyatGecmisi.query.filter_by(yatirim_id=yatirim.id).order_by(FiyatGecmisi.tarih.desc()).first()
+        
+        if not son_kayit or son_kayit.fiyat != veri['guncel_fiyat']:
+            yeni_kayit = FiyatGecmisi(
+                yatirim_id=yatirim.id,
+                tarih=veri['tarih'],
+                fiyat=veri['guncel_fiyat']
+            )
+            db.session.add(yeni_kayit)
+        
+        db.session.commit()
+        return True
+    else:
+        app.logger.warning(f"Yatırım verisi çekilemedi: {yatirim.tip} {yatirim.kod}")
+        return False
+
+# Yeni arama fonksiyonları
+def fon_ara(terim):
+    """Fon arama API'si"""
+    terim = terim.upper()
+    
+    # 1. TEFAS'tan fon verileri çekilir (isimleriyle birlikte)
+    # Bu örnek için sadece yaygın fonları içeren bir listeyi döndürüyoruz
+    # Gerçek uygulamada buraya TEFAS'tan veri çekme API'si eklenebilir
+    
+    yaygın_fonlar = [
+        {"kod": "TLI", "isim": "Ak Portföy Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "TI2", "isim": "İş Portföy Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "AFA", "isim": "Ak Portföy Amerika Yabancı Hisse Senedi Fonu", "tur": "fon"},
+        {"kod": "TTE", "isim": "İş Portföy BIST Teknoloji Ağırlıklı Sınırlamalı Endeks Hisse Senedi Fonu", "tur": "fon"},
+        {"kod": "IYF", "isim": "İş Portföy Yıldızlar Serbest Fon", "tur": "fon"},
+        {"kod": "TYA", "isim": "HSBC Portföy Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "HVS", "isim": "HSBC Portföy Hisse Senedi Fonu", "tur": "fon"},
+        {"kod": "YFT", "isim": "Yapı Kredi Portföy BİST 30 Endeksi Hisse Senedi Fonu", "tur": "fon"},
+        {"kod": "TZA", "isim": "Ziraat Portföy Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "ZBJ", "isim": "Ziraat Portföy Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "ZPE", "isim": "Ziraat Portföy BIST 30 Endeksi Hisse Senedi Fonu", "tur": "fon"},
+        {"kod": "GMR", "isim": "Garanti Portföy Birinci Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "GUD", "isim": "Garanti Portföy Değişken Fon", "tur": "fon"},
+        {"kod": "DZE", "isim": "Deniz Portföy BIST 100 Endeksi Hisse Senedi Fonu", "tur": "fon"},
+        {"kod": "OMF", "isim": "Osmanlı Portföy Para Piyasası Fonu", "tur": "fon"},
+        {"kod": "VEF", "isim": "Vakıf Emeklilik Para Piyasası Fonu", "tur": "fon"}
+    ]
+    
+    sonuclar = []
+    
+    # Koddaki eşleşme (tam eşleşmeyi en önde göster)
+    for fon in yaygın_fonlar:
+        if fon["kod"] == terim:
+            sonuclar.append(fon)
+            break
+    
+    # Koddaki eşleşme (kısmi)
+    for fon in yaygın_fonlar:
+        if terim in fon["kod"] and fon not in sonuclar:
+            sonuclar.append(fon)
+    
+    # İsimdeki eşleşme
+    for fon in yaygın_fonlar:
+        if terim in fon["isim"].upper() and fon not in sonuclar:
+            sonuclar.append(fon)
+    
+    return sonuclar
+
+def hisse_ara(terim):
+    """Hisse senedi arama API'si"""
+    terim = terim.upper()
+    
+    # Yaygın hisse senetleri listesi
+    yaygın_hisseler = [
+        {"kod": "THYAO", "isim": "Türk Hava Yolları", "tur": "hisse"},
+        {"kod": "GARAN", "isim": "Garanti Bankası", "tur": "hisse"},
+        {"kod": "ASELS", "isim": "Aselsan", "tur": "hisse"},
+        {"kod": "SISE", "isim": "Şişe Cam", "tur": "hisse"},
+        {"kod": "AKBNK", "isim": "Akbank", "tur": "hisse"},
+        {"kod": "PGSUS", "isim": "Pegasus", "tur": "hisse"},
+        {"kod": "KRDMD", "isim": "Kardemir", "tur": "hisse"},
+        {"kod": "KOZAL", "isim": "Koza Altın", "tur": "hisse"},
+        {"kod": "TUPRS", "isim": "Tüpraş", "tur": "hisse"},
+        {"kod": "EREGL", "isim": "Ereğli Demir Çelik", "tur": "hisse"},
+        {"kod": "BIMAS", "isim": "BİM Mağazalar", "tur": "hisse"},
+        {"kod": "YKBNK", "isim": "Yapı Kredi Bankası", "tur": "hisse"},
+        {"kod": "TCELL", "isim": "Turkcell", "tur": "hisse"},
+        {"kod": "TOASO", "isim": "Tofaş Oto", "tur": "hisse"},
+        {"kod": "VESTL", "isim": "Vestel", "tur": "hisse"}
+    ]
+    
+    sonuclar = []
+    
+    # Koddaki eşleşme (tam eşleşmeyi en önde göster)
+    for hisse in yaygın_hisseler:
+        if hisse["kod"] == terim:
+            sonuclar.append(hisse)
+            break
+    
+    # Koddaki eşleşme (kısmi)
+    for hisse in yaygın_hisseler:
+        if terim in hisse["kod"] and hisse not in sonuclar:
+            sonuclar.append(hisse)
+    
+    # İsimdeki eşleşme
+    for hisse in yaygın_hisseler:
+        if terim in hisse["isim"].upper() and hisse not in sonuclar:
+            sonuclar.append(hisse)
+    
+    return sonuclar
+
+def yatirim_kodu_dogrula():
+    """Yatırım kodunu doğrular ve varsa güncel bilgilerini getirir"""
+    veri = request.get_json()
+    
+    if not veri or 'tip' not in veri or 'kod' not in veri:
+        return jsonify({
+            'basarili': False,
+            'hata': 'Eksik parametreler'
+        })
+    
+    tip = veri['tip']
+    kod = veri['kod'].upper().strip()
+    
+    if tip == 'fon':
+        sonuc = tefas_fon_verisi_cek(kod)
+    elif tip == 'hisse':
+        sonuc = bist_hisse_verisi_cek(kod)
+    elif tip == 'altin':
+        sonuc = altin_verisi_cek(kod)
+    elif tip == 'doviz':
+        sonuc = doviz_verisi_cek(kod)
+    else:
+        return jsonify({
+            'basarili': False,
+            'hata': 'Geçersiz yatırım tipi'
+        })
+    
+    if sonuc:
+        return jsonify({
+            'basarili': True,
+            'veri': {
+                'kod': kod,
+                'isim': sonuc['isim'],
+                'guncel_fiyat': float(sonuc['guncel_fiyat']),
+                'tarih': sonuc['tarih'].strftime('%Y-%m-%d %H:%M:%S')
+            }
+        })
+    else:
+        return jsonify({
+            'basarili': False,
+            'hata': 'Yatırım kodu bulunamadı veya veri çekilemedi'
+        })

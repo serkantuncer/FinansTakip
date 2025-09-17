@@ -1,0 +1,33 @@
+1. Klasör Oluşturma
+
+Tüm dosyalar artık tefas_fonlar_export klasörüne kaydediliyor
+Klasör yoksa otomatik olarak oluşturuluyor
+
+2. JavaScript/Obje Formatı
+Yeni export_to_js_format() metodu eklendi. Bu format şu şekilde çıktı veriyor:
+
+3. Gelişmiş Export Fonksiyonları
+
+export_all_formats(): Tüm formatları tek seferde oluşturur
+export_specific_type_to_files(): Artık 3 format (JSON, Excel, JS) döndürür
+
+4. Dosya Organizasyonu
+proje_klasörü/
+└── tefas_fonlar_export/
+    ├── tefas_funds_complete_20250613_133045.json
+    ├── tefas_funds_complete_20250613_133045.xlsx
+    ├── tefas_funds_js_format_20250613_133045.txt
+    ├── tefas_para_piyasasi_20250613_133100.json
+    ├── tefas_para_piyasasi_20250613_133100.xlsx
+    └── tefas_para_piyasasi_js_20250613_133100.txt
+
+5. Kullanım Örnekleri
+
+Sadece Para Piyasası fonları için:
+pythonclassifier = TefasFundClassifier()
+json_file, excel_file, js_file = classifier.export_specific_type_to_files('Para Piyasası')
+
+Tüm fonlar için:
+pythonclassifier = TefasFundClassifier()
+json_file, excel_file, js_file = classifier.export_all_formats()
+Artık istediğiniz { kod: 'ZBJ', isim: 'FON ADI' } formatında dosyalar oluşacak ve hepsi tefas_fonlar_export klasörüne düzenli şekilde kaydedilecek!RetryClaude does not have the ability to run the code it generates yet.Claude can make mistakes. Please double-check responses.

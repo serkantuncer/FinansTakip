@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Hazırlanıyor - Finans Takip</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .pdf-processing {
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .processing-card {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 3rem;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3em;
+        }
+        .progress {
+            height: 8px;
+            margin: 1.5rem 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, #17a2b8, #007bff);
+        }
+        .status-text {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+        .cancel-btn {
+            margin-top: 2rem;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        .pulse-text {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="pdf-processing">
+                    <div class="processing-card">
+                        <div class="mb-4">
+                            <div class="spinner-border text-info" role="status">
+                                <span class="visually-hidden">Yükleniyor...</span>
+                            </div>
+                        </div>
+                        
+                        <h3 class="text-white mb-3">PDF Hazırlanıyor</h3>
+                        
+                        <div class="status-text pulse-text" id="statusText">
+                            Portföy verileriniz işleniyor...
+                        </div>
+                        
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" 
+                                 style="width: 0%" 
+                                 id="progressBar">
+                            </div>
+                        </div>
+                        
+                        <div class="text-light small mb-3" id="timeEstimate">
+                            Tahmini süre: 10-30 saniye
+                        </div>
+                        
+                        <div class="cancel-btn">
+                            <a href="{{ url_for('yatirimlar') }}" class="btn btn-outline-light">
+                                <i class="fas fa-arrow-left"></i> Geri Dön
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let checkInterval;
+        let startTime = Date.now();
+        let progress = 0;
+        
+        const statusTexts = [
+            'Portföy verileriniz işleniyor...',
+            'HTML raporu oluşturuluyor...',
+            'PDF formatına dönüştürülüyor...',
+            'Son kontroller yapılıyor...'
+        ];
+        
+        let currentStatusIndex = 0;
+        
+        // Progress bar animasyonu
+        function updateProgress() {
+            progress += Math.random() * 15 + 5; // 5-20 arası artış
+            if (progress > 95) progress = 95; // %95'e kadar göster
+            
+            document.getElementById('progressBar').style.width = progress + '%';
+            
+            // Status metnini değiştir
+            if (Math.random() > 0.7 && currentStatusIndex < statusTexts.length - 1) {
+                currentStatusIndex++;
+                document.getElementById('statusText').textContent = statusTexts[currentStatusIndex];
+            }
+            
+            // Geçen süreyi güncelle
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            if (elapsed > 5) {
+                document.getElementById('timeEstimate').textContent = 
+                    `Geçen süre: ${elapsed} saniye`;
+            }
+        }
+        
+        // PDF durumunu kontrol et
+        function checkStatus() {
+            fetch(`/api/pdf_status/{{ task_id }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        // Tamamlandı - indirme sayfasına yönlendir
+                        document.getElementById('statusText').textContent = 'PDF hazır! Yönlendiriliyor...';
+                        document.getElementById('progressBar').style.width = '100%';
+                        
+                        setTimeout(() => {
+                            window.location.href = `/pdf_status/{{ task_id }}`;
+                        }, 1000);
+                        
+                        clearInterval(checkInterval);
+                        clearInterval(progressInterval);
+                    } else if (data.status === 'error') {
+                        // Hata durumu
+                        document.getElementById('statusText').textContent = 'PDF oluşturulamadı!';
+                        document.getElementById('statusText').className = 'status-text text-danger';
+                        document.querySelector('.spinner-border').style.display = 'none';
+                        
+                        clearInterval(checkInterval);
+                        clearInterval(progressInterval);
+                        
+                        setTimeout(() => {
+                            window.location.href = "{{ url_for('yatirimlar') }}";
+                        }, 3000);
+                    }
+                    // 'processing' durumunda devam et
+                })
+                .catch(error => {
+                    console.error('Status check error:', error);
+                    // Hata durumunda da devam et, belki geçici bir sorun
+                });
+        }
+        
+        // İlk kontrol 2 saniye sonra başla
+        setTimeout(() => {
+            checkInterval = setInterval(checkStatus, 2000); // Her 2 saniyede kontrol et
+        }, 2000);
+        
+        // Progress bar animasyonunu başlat
+        const progressInterval = setInterval(updateProgress, 1000);
+        
+        // Sayfa kapanınca interval'ları temizle
+        window.addEventListener('beforeunload', () => {
+            if (checkInterval) clearInterval(checkInterval);
+            if (progressInterval) clearInterval(progressInterval);
+        });
+    </script>
+</body>
+</html>

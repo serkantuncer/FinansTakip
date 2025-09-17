@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Yatırımlar - Yatırım Takip{% endblock %}
+{% block title %}Yatırımlar - Financial Portal{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -31,42 +31,40 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <form method="GET" class="row g-3">
+                    <div class="row g-3" id="searchForm">
                         <div class="col-md-4">
-                            <label for="search" class="form-label">Arama</label>
-                            <input type="text" class="form-control" id="search" name="search" 
-                                   value="{{ search }}" placeholder="Kod, isim veya nota göre ara...">
+                            <label for="search-input" class="form-label">Arama</label>
+                            <input type="text" class="form-control" id="search-input" 
+                                   placeholder="Kod, isim veya nota göre ara..." autocomplete="off">
                         </div>
                         <div class="col-md-3">
-                            <label for="tip" class="form-label">Tip</label>
-                            <select class="form-select" id="tip" name="tip">
+                            <label for="tip-filter" class="form-label">Tip</label>
+                            <select class="form-select" id="tip-filter">
                                 <option value="">Tümü</option>
-                                <option value="fon" {% if tip_filter == 'fon' %}selected{% endif %}>Fon</option>
-                                <option value="hisse" {% if tip_filter == 'hisse' %}selected{% endif %}>Hisse</option>
-                                <option value="altin" {% if tip_filter == 'altin' %}selected{% endif %}>Altın</option>
-                                <option value="doviz" {% if tip_filter == 'doviz' %}selected{% endif %}>Döviz</option>
+                                <option value="fon">Fon</option>
+                                <option value="hisse">Hisse</option>
+                                <option value="altin">Altın</option>
+                                <option value="doviz">Döviz</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label for="kategori" class="form-label">Kategori</label>
-                            <select class="form-select" id="kategori" name="kategori">
+                            <label for="kategori-filter" class="form-label">Kategori</label>
+                            <select class="form-select" id="kategori-filter">
                                 <option value="">Tümü</option>
                                 {% for kategori in kategoriler %}
-                                <option value="{{ kategori }}" {% if kategori_filter == kategori %}selected{% endif %}>
-                                    {{ kategori }}
-                                </option>
+                                <option value="{{ kategori }}">{{ kategori }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">&nbsp;</label>
                             <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-search me-2"></i>Filtrele
+                                <button type="button" id="clearFilters" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times me-2"></i>Temizle
                                 </button>
                             </div>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -84,185 +82,159 @@
                             <table class="table table-hover mb-0">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th>Tip</th>
                                         <th>Kod</th>
                                         <th>İsim</th>
-                                        <th>Alış Tarihi</th>
-                                        <th>Alış Fiyatı</th>
-                                        <th>Miktar</th>
+                                        <th>Tip</th>
+                                        <th>Ortalama Alış</th>
+                                        <th>Toplam Miktar</th>
                                         <th>Güncel Fiyat</th>
-                                        <th>Güncel Tutar</th>
-                                        <th>Kar/Zarar</th>
+                                        <th>Toplam Değer</th>
+                                        <th>Kâr/Zarar</th>
+                                        <th>Getiri %</th>
                                         <th>İşlemler</th>
                                     </tr>
                                 </thead>
-                            <tbody>
-                                {% for yatirim in yatirimlar %}
-                                <tr>
-                                    <td>
-                                        <span class="badge bg-secondary">{{ yatirim.tip|title }}</span>
-                                    </td>
-                                    <td><strong>{{ yatirim.kod }}</strong></td>
-                                    <td>
-                                        <span class="text-truncate" data-bs-toggle="tooltip" title="{{ yatirim.isim or 'İsim yok' }}">
-                                            {{ yatirim.isim[:30] + '...' if yatirim.isim and yatirim.isim|length > 30 else yatirim.isim or '-' }}
-                                        </span>
-                                    </td>
-                                    <td>{{ yatirim.alis_tarihi.strftime('%d.%m.%Y') }}</td>
-                                    <td>₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</td>
-                                    <td>{{ "{:,.2f}".format(yatirim.miktar) }}</td>
-                                    <td>
-                                        {% if yatirim.guncel_fiyat %}
-                                            ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
-                                            {% if yatirim.son_guncelleme %}
-                                                <br><small class="text-muted">{{ yatirim.son_guncelleme.strftime('%d.%m %H:%M') }}</small>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if yatirim.guncel_fiyat %}
-                                            ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if yatirim.guncel_fiyat %}
-                                            {% set kar_zarar = (yatirim.guncel_fiyat - yatirim.alis_fiyati) * yatirim.miktar %}
-                                            <span class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                                ₺{{ "{:+,.2f}".format(kar_zarar) }}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if yatirim.guncel_fiyat %}
-                                            {% set getiri = (yatirim.guncel_fiyat / yatirim.alis_fiyati - 1) * 100 %}
-                                            <span class="{% if getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                                {{ "{:+.2f}".format(getiri) }}%
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if yatirim.kategori %}
-                                            <span class="badge bg-info">{{ yatirim.kategori }}</span>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="btn-group btn-group-sm">
-                                            <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=yatirim.id) }}" class="d-inline">
-                                                <button type="submit" class="btn btn-outline-success" data-bs-toggle="tooltip" title="Fiyat Güncelle">
-                                                    <i class="fas fa-sync"></i>
-                                                </button>
-                                            </form>
-                                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" 
-                                                    data-bs-target="#duzenleModal{{ yatirim.id }}" title="Düzenle">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" 
-                                                    data-bs-target="#silModal{{ yatirim.id }}" title="Sil">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        </div>
-                    </div>
-                    
-                    <!-- Mobile/Tablet Card View -->
-                    <div class="d-xl-none">
-                        {% for yatirim in yatirimlar %}
-                        <div class="card mb-3 border-0 border-bottom">
-                            <div class="card-body py-3">
-                                <div class="row align-items-center">
-                                    <div class="col-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <span class="badge bg-secondary me-2">{{ yatirim.tip|title }}</span>
-                                            <strong class="text-primary">{{ yatirim.kod }}</strong>
-                                        </div>
-                                        <h6 class="mb-1 text-truncate" title="{{ yatirim.isim or 'İsim yok' }}">
-                                            {{ yatirim.isim[:40] + '...' if yatirim.isim and yatirim.isim|length > 40 else yatirim.isim or '-' }}
-                                        </h6>
-                                        <small class="text-muted">{{ yatirim.alis_tarihi.strftime('%d.%m.%Y') }}</small>
-                                    </div>
-                                    <div class="col-6 text-end">
-                                        <div class="mb-2">
-                                            {% if yatirim.guncel_fiyat %}
-                                                {% set kar_zarar = (yatirim.guncel_fiyat - yatirim.alis_fiyati) * yatirim.miktar %}
-                                                {% set getiri = (yatirim.guncel_fiyat / yatirim.alis_fiyati - 1) * 100 %}
-                                                <div class="fw-bold {% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                                    ₺{{ "{:+,.2f}".format(kar_zarar) }}
-                                                </div>
-                                                <small class="{% if getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                                    {{ "{:+.2f}".format(getiri) }}%
-                                                </small>
+                                <tbody>
+                                    {% for grup in yatirim_gruplari %}
+                                    <tr data-kategori="{{ grup.kategori or '' }}">
+                                        <td>
+                                            <strong>{{ grup.kod }}</strong>
+                                            {% if grup.kalem_sayisi > 1 %}
+                                                <span class="badge bg-warning text-dark ms-1">{{ grup.kalem_sayisi }} kalem</span>
                                             {% else %}
-                                                <div class="fw-bold text-muted">-</div>
-                                                <small class="text-muted">Güncelleyin</small>
+                                                <br><small class="text-muted">{{ grup.kalemler[0]['alis_tarihi'].strftime('%d/%m/%Y') }}</small>
                                             {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="row mt-2">
-                                    <div class="col-4">
-                                        <small class="text-muted">Alış</small>
-                                        <div class="fw-bold">₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</div>
-                                        <small class="text-muted">x{{ "{:,.1f}".format(yatirim.miktar) }}</small>
-                                    </div>
-                                    <div class="col-4">
-                                        <small class="text-muted">Güncel</small>
-                                        <div class="fw-bold">
-                                            {% if yatirim.guncel_fiyat %}
-                                                ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
+                                        </td>
+                                        <td>{{ grup.isim[:20] + '...' if grup.isim and grup.isim|length > 20 else grup.isim or '-' }}</td>
+                                        <td><span class="badge bg-secondary">{{ grup.tip|title }}</span></td>
+                                        <td>₺{{ "{:,.6f}".format(grup.toplam_maliyet / (grup.toplam_maliyet / (grup.kalemler[0]['alis_fiyati'] if grup.kalemler else 1)) if grup.kalemler else 0) }}</td>
+                                        <td>
+                                            {% set toplam_miktar = grup.kalemler|map(attribute='miktar')|sum %}
+                                            {{ "{:,.6f}".format(toplam_miktar) }}
+                                        </td>
+                                        <td>
+                                            {% if grup.kalemler and grup.kalemler[0]['guncel_fiyat'] %}
+                                                ₺{{ "{:,.6f}".format(grup.kalemler[0]['guncel_fiyat']) }}
                                             {% else %}
                                                 <span class="text-muted">-</span>
                                             {% endif %}
-                                        </div>
-                                        {% if yatirim.son_guncelleme %}
-                                            <small class="text-muted">{{ yatirim.son_guncelleme.strftime('%d.%m %H:%M') }}</small>
-                                        {% endif %}
+                                        </td>
+                                        <td>₺{{ "{:,.2f}".format(grup.toplam_guncel_deger) }}</td>
+                                        <td>
+                                            <span class="{% if grup.toplam_kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ₺{{ "{:+,.2f}".format(grup.toplam_kar_zarar) }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="{% if grup.ortalama_getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ "{:+.2f}".format(grup.ortalama_getiri) }}%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                {% if grup.kalem_sayisi == 1 %}
+                                                    <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=grup.kalemler[0]['id']) }}" class="d-inline">
+                                                        <button type="submit" class="btn btn-outline-success btn-sm" title="Fiyat Güncelle">
+                                                            <i class="fas fa-sync"></i>
+                                                        </button>
+                                                    </form>
+                                                    <button type="button" class="btn btn-outline-warning btn-sm" 
+                                                            data-bs-toggle="modal" data-bs-target="#duzenleModal{{ grup.kalemler[0]['id'] }}" title="Düzenle">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                            data-bs-toggle="modal" data-bs-target="#silModal{{ grup.kalemler[0]['id'] }}" title="Sil">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                {% else %}
+                                                    <button class="btn btn-outline-info btn-sm" type="button" 
+                                                            data-bs-toggle="modal" data-bs-target="#detailModal" 
+                                                            onclick="showGroupDetails('{{ grup.kod }}')" 
+                                                            title="Kalem Detayları">
+                                                        <i class="fas fa-list-ul"></i>
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Card View -->
+                    <div class="d-xl-none">
+                        {% for grup in yatirim_gruplari %}
+                        <div class="card mb-3" data-kategori="{{ grup.kategori or '' }}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="card-title mb-0">
+                                            <strong>{{ grup.kod }}</strong>
+                                            {% if grup.kalem_sayisi > 1 %}
+                                                <span class="badge bg-warning text-dark ms-1">{{ grup.kalem_sayisi }} kalem</span>
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">{{ grup.isim or '-' }}</small>
                                     </div>
-                                    <div class="col-4 text-end">
-                                        <div class="btn-group btn-group-sm">
-                                            <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=yatirim.id) }}" class="d-inline">
-                                                <button type="submit" class="btn btn-outline-success btn-sm" title="Fiyat Güncelle">
-                                                    <i class="fas fa-sync"></i>
-                                                </button>
-                                            </form>
-                                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" 
-                                                    data-bs-target="#duzenleModal{{ yatirim.id }}" title="Düzenle">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" 
-                                                    data-bs-target="#silModal{{ yatirim.id }}" title="Sil">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                    <span class="badge bg-secondary">{{ grup.tip|title }}</span>
+                                </div>
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Toplam Değer</small>
+                                        <div class="fw-bold">₺{{ "{:,.2f}".format(grup.toplam_guncel_deger) }}</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Kâr/Zarar</small>
+                                        <div class="fw-bold {% if grup.toplam_kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            ₺{{ "{:+,.2f}".format(grup.toplam_kar_zarar) }}
                                         </div>
                                     </div>
                                 </div>
+
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="{% if grup.ortalama_getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ "{:+.2f}".format(grup.ortalama_getiri) }}%
+                                    </span>
+                                    <div class="btn-group" role="group">
+                                        {% if grup.kalem_sayisi == 1 %}
+                                            <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=grup.kalemler[0]['id']) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-success btn-sm">
+                                                    <i class="fas fa-sync"></i>
+                                                </button>
+                                            </form>
+                                            <button type="button" class="btn btn-outline-warning btn-sm" 
+                                                    data-bs-toggle="modal" data-bs-target="#duzenleModal{{ grup.kalemler[0]['id'] }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                    data-bs-toggle="modal" data-bs-target="#silModal{{ grup.kalemler[0]['id'] }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        {% else %}
+                                            <button class="btn btn-outline-info btn-sm" type="button" 
+                                                    data-bs-toggle="modal" data-bs-target="#detailModal" 
+                                                    onclick="showGroupDetails('{{ grup.kod }}')"
+                                                title="Kalem Detayları">
+                                                <i class="fas fa-list-ul"></i>
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+
                             </div>
                         </div>
                         {% endfor %}
                     </div>
                     {% else %}
                     <div class="text-center py-5">
-                        <i class="fas fa-chart-line fa-4x text-muted mb-4"></i>
-                        <h4 class="text-muted">Henüz yatırım eklenmemiş</h4>
-                        <p class="text-muted mb-4">İlk yatırımınızı ekleyerek başlayın!</p>
-                        <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#yatirimEkleModal">
-                            <i class="fas fa-plus me-2"></i>İlk Yatırımı Ekle
-                        </button>
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Henüz yatırım eklenmemiş</h5>
+                        <p class="text-muted">İlk yatırımınızı eklemek için yukarıdaki "Yeni Yatırım" butonunu kullanın.</p>
                     </div>
                     {% endif %}
                 </div>
@@ -434,11 +406,58 @@
 </div>
 {% endfor %}
 
+<!-- Investment Details Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-labelledby="detailModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalTitle">
+                    <i class="fas fa-list-ul me-2"></i>Kalem Detayları
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat" title="Modalı Kapat"></button>
+            </div>
+            <div class="modal-body" id="detailModalBody">
+                <div class="text-center py-4">
+                    <p class="text-muted">İçerik yükleniyor...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JSON Data for JavaScript -->
+<script type="application/json" id="yatirimGroupsData">
+{{ yatirim_gruplari|tojson|safe }}
+</script>
+
 <script>
+// Global variable to store investment groups data
+let yatirimGroupsData = {};
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Load investment groups data from JSON script tag
+    try {
+        const dataScript = document.getElementById('yatirimGroupsData');
+        if (dataScript) {
+            const groupsArray = JSON.parse(dataScript.textContent);
+            // Convert array to object with kod as key for quick lookup
+            groupsArray.forEach(grup => {
+                yatirimGroupsData[grup.kod] = grup;
+            });
+            console.log('✅ Investment groups data loaded:', Object.keys(yatirimGroupsData));
+        }
+    } catch (e) {
+        console.error('❌ Failed to load investment groups data:', e);
+    }
+
     // Set default date to today
     document.getElementById('alis_tarihi').value = new Date().toISOString().split('T')[0];
-    
+
     // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -449,39 +468,600 @@ document.addEventListener('DOMContentLoaded', function() {
 // Predefined investment codes for search
 const investmentCodes = {
     'fon': [
-        { kod: 'TLI', isim: 'TÜRK LİRASI PARA PİYASASI FONU' },
-        { kod: 'TI2', isim: 'TEB PORTFÖY İKİNCİ FONU' },
-        { kod: 'AFA', isim: 'AKBANK PORTFÖY FLEKSİBEL FON A' },
-        { kod: 'TTE', isim: 'TEB PORTFÖY EURO FON' },
+        // PARA PİYASASI FONLAR
+        { kod: 'AAL', isim: 'ATA ASSET MANAGEMENT MONEY MARKET (TL) FUND' },
+        { kod: 'AC4', isim: 'PARDUS PORTFÖY PARA PİYASASI (TL) FON' },
+        { kod: 'ALE', isim: 'AK ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'ANL', isim: 'AK ASSET ALTERNATİF BANK MONEY MARKET FUND' },
+        { kod: 'BGP', isim: 'AK PORTFÖY ÜÇÜNCÜ PARA PİYASASI (TL) FONU' },
+        { kod: 'BIP', isim: 'İSTANBUL PORTFÖY BİRİNCİ PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'BRG', isim: 'TEB PORTFÖY BURGAN BANK PARA PİYASASI (TL) FONU' },
+        { kod: 'BTP', isim: 'TRİVE PORTFÖY PARA PİYASASI SERBEST FON' },
+        { kod: 'CFO', isim: 'ROTA PORTFÖY İKİNCİ PARA PİYASASI FONU' },
+        { kod: 'DCB', isim: 'DENİZ PORTFÖY PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'DLY', isim: 'DENİZ ASSET MANAGEMENT MONEY MARKET (TL) FUND' },
+        { kod: 'DL2', isim: 'DENİZ PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'ECB', isim: 'GLOBAL MD ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'EIL', isim: 'QİNVEST ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'EKL', isim: 'KUVEYT TÜRK PORTFÖY EMLAK KATILIM BANKASI PARA PİYASASI KATILIM FONU' },
+        { kod: 'FFD', isim: 'FİBA PORTFÖY ÜÇÜNCÜ PARA PİYASASI (TL) FONU' },
+        { kod: 'FHP', isim: 'FİBA PORTFÖY ÖPY PARA PİYASASI SERBEST (TL) ÖZEL FON' },
+        { kod: 'FIL', isim: 'FİBA ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'FI5', isim: 'QNB ASSET MANAGEMENT MONEY MARKET (TL) FUND' },
+        { kod: 'FPI', isim: 'FONMAP PORTFÖY BİRİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'FSF', isim: 'FİBA PORTFÖY PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'FSK', isim: 'QNB PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'GAL', isim: 'GARANTİ ASSET MANAGEMENT SECOND MONEY MARKET FUND' },
+        { kod: 'GJH', isim: 'GARANTİ PORTFÖY PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'GKH', isim: 'GARANTİ PORTFÖY PARA PİYASASI KATILIM SERBEST (TL) FON' },
+        { kod: 'GO6', isim: 'FONERİA PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'GPZ', isim: 'GARANTİ PORTFÖY ÜÇÜNCÜ PARA PİYASASI FONU' },
+        { kod: 'GTL', isim: 'GARANTİ ASSET MANAGEMENT FIRST MONEY MARKET FUND' },
+        { kod: 'HIP', isim: 'HSBC PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'HLL', isim: 'HALK ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'HPH', isim: 'HEDEF PORTFÖY PARA PİYASASI KATILIM FONU' },
+        { kod: 'HSL', isim: 'HSBC ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'HVT', isim: 'ALLBATROSS PORTFÖY BİRİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'HYV', isim: 'HEDEF PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'ICE', isim: 'ICBC TURKEY ASSET MANAGEMENT MONEY MARKET (TL) FUND' },
+        { kod: 'IDL', isim: 'AKTİF PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'IGL', isim: 'TEB ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'IJV', isim: 'İSTANBUL PORTFÖY BİRİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'ILH', isim: 'İŞ PORTFÖY BİRİNCİ PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'IOO', isim: 'İŞ PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'IOP', isim: 'İŞ PORTFÖY ODEABANK PARA PİYASASI (TL) FONU' },
+        { kod: 'IRY', isim: 'INVEO PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'IUZ', isim: 'İŞ PORTFÖY ANADOLUBANK PARA PİYASASI (TL) FONU' },
+        { kod: 'KIE', isim: 'TRIVE PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'KLU', isim: 'KUVEYT TÜRK PORTFÖY PARA PİYASASI KATILIM (TL) FONU' },
+        { kod: 'KPP', isim: 'KARE PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'KPR', isim: 'KUVEYT TÜRK PORTFÖY PARA PİYASASI KATILIM SERBEST FON' },
+        { kod: 'KSK', isim: 'AZİMUT PORTFÖY İKİNCİ PARA PİYASASI KATILIM FONU' },
+        { kod: 'LKT', isim: 'AKTİF PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'MPL', isim: 'MT PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'NRG', isim: 'NEO PORTFÖY BİRİNCİ PARA PİYASASI FONU' },
+        { kod: 'NSA', isim: 'NEO PORTFÖY PARA PİYASASI KATILIM SERBEST FON' },
+        { kod: 'NSP', isim: 'NUROL PORTFÖY PARA PİYASASI KATILIM FONU' },
+        { kod: 'NVB', isim: 'NEO PORTFÖY İKİNCİ PARA PİYASASI (TL) FON' },
+        { kod: 'NZT', isim: 'NEO PORTFÖY PARA PİYASASI SERBEST FON' },
+        { kod: 'OPJ', isim: 'QNB PORTFÖY QNB PARA PİYASASI (TL) FONU' },
+        { kod: 'OYL', isim: 'OYAK ASSET MANAGEMENT FIRST MONEY MARKET FUND' },
+        { kod: 'PIP', isim: 'GARANTİ PORTFÖY İKİNCİ PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'PJL', isim: 'PHİLLİP PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'PLR', isim: 'OSMANLI PORTFÖY PARA PİYASASI FONU' },
+        { kod: 'PPI', isim: 'YAPI KREDİ PORTFÖY ÜÇÜNCÜ PARA PİYASASI (TL) FONU' },
+        { kod: 'PPJ', isim: 'AK PORTFÖY İKİNCİ PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'PPK', isim: 'QNB PORTFÖY PARA PİYASASI KATILIM (TL) FONU' },
+        { kod: 'PPN', isim: 'NUROL PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PPP', isim: 'PERFORM PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PPT', isim: 'ATLAS PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PPZ', isim: 'AZİMUT PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PRD', isim: 'PİRAMİT PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PRH', isim: 'AURA PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PRY', isim: 'PUSULA PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'PSE', isim: 'ATLAS PORTFÖY PARA PİYASASI SERBEST FON' },
+        { kod: 'PTE', isim: 'TEB PORTFÖY BİRİNCİ PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'PTL', isim: 'TEB PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'PTS', isim: 'QNB PORTFÖY PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'PUR', isim: 'AK PORTFÖY BİRİNCİ PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'PYB', isim: 'TEB PORTFÖY ALTERNATİFBANK PARA PİYASASI (TL) FON' },
+        { kod: 'RBP', isim: 'RE-PIE PORTFÖY BİRİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'RPP', isim: 'ROTA PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'RRP', isim: 'RE-PIE PORTFÖY PARA PİYASASI KATILIM (TL) FON' },
+        { kod: 'SAP', isim: 'AK PORTFÖY ŞEKERBANK PARA PİYASASI (TL) FONU' },
+        { kod: 'SKL', isim: 'TEB PORTFÖY ŞEKERBANK PARA PİYASASI (TL) FONU' },
+        { kod: 'SLF', isim: 'ROTA ASSET MANAGEMENT ŞEKERBANK MONEY MARKET FUND' },
+        { kod: 'TCB', isim: 'TACİRLER ASSET MONEY MARKET FUND' },
+        { kod: 'TI1', isim: 'İŞ ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'TKM', isim: 'TEB ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'TLK', isim: 'AKTİF PORTFÖY PARA PİYASASI KATILIM (TL) FONU' },
+        { kod: 'TP2', isim: 'TERA PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'TZL', isim: 'ZİRAAT ASSET MANAGEMENT MONEY MARKET FUND' },
+        { kod: 'UPP', isim: 'ÜNLÜ PORTFÖY PARA PİYASASI (TL) FONU' },
+        { kod: 'VK6', isim: 'VAKIF ASSET MANAGEMENT FIRST MONEY MARKET FUND' },
+        { kod: 'YLB', isim: 'YAPI KREDİ ASSET MANAGEMENT MONEY MARKET Fund' },
+        { kod: 'YPT', isim: 'YAPI KREDİ PORTFÖY PARA PİYASASI SERBEST (TL) FON' },
+        { kod: 'YVD', isim: 'YAPI KREDİ PORTFÖY İKİNCİ PARA PİYASASI (TL) FONU' },
+        { kod: 'ZAY', isim: 'KUVEYT TÜRK PORTFÖY SEPET HESAP PARA PİYASASI KATILIM (TL) FONU' },
+        { kod: 'ZA2', isim: 'KUVEYT TÜRK PORTFÖY İKİNCİ SEPET HESAP PARA PİYASASI KATILIM FONU' },
         { kod: 'ZBJ', isim: 'ZİRAAT PORTFÖY BAŞAK PARA PİYASASI (TL) FONU' },
-        { kod: 'APK', isim: 'AKBANK PORTFÖY HİSSE SENEDİ FONU' },
-        { kod: 'AEF', isim: 'AKBANK PORTFÖY EUROBOND (TL) FONU' },
-        { kod: 'AFT', isim: 'AKBANK PORTFÖY FLEKSİBEL FON SERİSİ 2' },
-        { kod: 'IRY', isim: 'İŞ PORTFÖY RİSKSİZ YATIRIM FONU' },
-        { kod: 'GAP', isim: 'GARANTİ PORTFÖY PARA PİYASASI FONU' },
-        { kod: 'HPP', isim: 'HSBC PORTFÖY PARA PİYASASI FONU' },
-        { kod: 'YPP', isim: 'YAPI KREDİ PORTFÖY PARA PİYASASI FONU' },
-        { kod: 'VPP', isim: 'VEKİLETEN PORTFÖY PARA PİYASASI FONU' },
-        { kod: 'FPP', isim: 'FİNANSBANK PORTFÖY PARA PİYASASI FONU' },
-        { kod: 'DPP', isim: 'DENİZBANK PORTFÖY PARA PİYASASI FONU' }
+        { kod: 'ZP8', isim: 'ZİRAAT PORTFÖY KEHRİBAR PARA PİYASASI KATILIM SERBEST (TL) FON' },
+        // HİSSE SENEDİ FONLAR
+        { kod: 'AAV', isim: 'ATA ASSET MANAGEMENT SECOND EQUITY (TL) FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'ACC', isim: 'İSTANBUL ASSET MANAGEMENT FOURTH  EQUITY FUND (EQUITY-INTENSIVE)' },
+        { kod: 'ACK', isim: 'ISTANBUL ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'ADP', isim: 'AK ASSET MANAGEMENT BIST BANK INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'AFA', isim: 'AK ASSET MANAGEMENT AMERICA FOREIGN EQUITY FUND' },
+        { kod: 'AFT', isim: 'AK ASSET MANAGEMENT NEW TECHNOLOGIES FOREIGN EQUITY FUND' },
+        { kod: 'AFV', isim: 'AK ASSET MANAGEMENT EUROPE FOREIGN EQUITY FUND' },
+        { kod: 'AHI', isim: 'ATLAS ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'AKU', isim: 'AK ASSET MANAGEMENT BIST 30 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'AK3', isim: 'AK ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'AYA', isim: 'ATA ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'DAH', isim: 'DENİZ ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'DPT', isim: 'DENİZ ASSET MANAGEMENT BIST DIVIDEND 25 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'DZE', isim: 'DENİZ ASSET MANAGEMENT BIST 100 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'EC2', isim: 'GLOBAL MD ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'EID', isim: 'QİNVEST ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'FPH', isim: 'FİBA ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'FYD', isim: 'QNB ASSET MANAGEMENT FIRST EQUITY FUND  (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GAE', isim: 'GARANTİ ASSET MANAGEMENT BIST30 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GAF', isim: 'INVEO ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GBG', isim: 'INVEO ASSET MANAGEMENT G-20 COUNTRIES FOREIGN EQUITY FUND' },
+        { kod: 'GHS', isim: 'GARANTİ ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GL1', isim: 'AZİMUT ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GMR', isim: 'INVEO ASSET MANAGEMENT SECOND EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GSP', isim: 'AZİMUT ASSET MANAGEMENT DIVIDEND-PAYING COMPANIES EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'GUH', isim: 'GARANTİ PORTFOLIO FOREIGN TECHNOLOGY STOCK FUND' },
+        { kod: 'HBU', isim: 'HSBC ASSET MANAGEMENT BIST 30 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'HVS', isim: 'HSBC ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'ICF', isim: 'ICBC TURKEY ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'KYA', isim: 'KARE ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'MAC', isim: 'MARMARA CAPITAL ASSET MANAGEMENT EQUITY (TL) FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'MPS', isim: 'AKTİF ASSET MANAGEMENT PARTICIPATION EQUITY (TL) FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'MTG', isim: 'DENİZ PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOGUN FON)' },
+        { kod: 'OHB', isim: 'OYAK ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'RBH', isim: 'ALBARAKA ASSET MANAGEMENT PARTICIPATION EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'ST1', isim: 'STRATEJİ ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TAU', isim: 'İŞ ASSET MANAGEMENT BIST BANKS INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TIE', isim: 'İŞ ASSET MANAGEMENT BIST 30 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TI2', isim: 'İŞ ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TI3', isim: 'İŞ ASSET MANAGEMENT İŞ BANK SUBSIDIARIES INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TKF', isim: 'TACİRLER ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TLH', isim: 'AURA ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TLZ', isim: 'ATA ASSET ANALYSIS STOCK (TL) FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TMG', isim: 'İŞ ASSET MANAGEMENT FOREIGN EQUITY FUND' },
+        { kod: 'TTE', isim: 'İŞ ASSET MANAGEMENT BIST TECHNOLOGY CAPPED INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TYH', isim: 'TEB ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'TZD', isim: 'ZİRAAT ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'UPH', isim: 'ÜNLÜ ASSET MANAGEMENT EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'YAS', isim: 'YAPI KREDİ ASSET MANAGEMENT KOÇ HOLDING SUBSIDIARIES AND EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'YAY', isim: 'YAPI KREDİ ASSET MANAGEMENT FOREIGN TECHNOLOGY SECTOR EQUITY Fund' },
+        { kod: 'YDI', isim: 'YAPI KREDİ ASSET MANAGEMENT MODEL PORTFOLİO EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'YEF', isim: 'YAPI KREDİ ASSET MANAGEMENT BIST 30 INDEX EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'YHS', isim: 'YAPI KREDİ ASSET MANAGEMENT FIRST EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'ZPE', isim: 'ZİRAAT ASSET MANAGEMENT PARTICIPATION EQUITY FUND (EQUITY-INTENSIVE FUND)' },
+        { kod: 'ZSF', isim: 'ZİRAAT PORTFÖY S&P/OIC COMCEC (İSEDAK) 50 SHARİAH ŞİRKETLERİ YABANCI HİSSE SENEDİ FONU' },
+        // HİSSE SENEDİ YOGUN FONLAR
+        { kod: 'ABJ', isim: 'ALLBATROSS PORTFÖY BENZ HİSSE SENEDİ SERBEST (TL) ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'AC5', isim: 'PARDUS PORTFÖY İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'AC7', isim: 'PARDUS PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'AC8', isim: 'PARDUS PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'AEV', isim: 'ALLBATROSS PORTFÖY SANAYİ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ALC', isim: 'AK PORTFÖY DIVIDEND PAYING COMPANIES EQUITY (TL) FUND (EQUITY INTENSIVE FUND)' },
+        { kod: 'AOJ', isim: 'ALLBATROSS PORTFÖY İNŞAAT SEKTÖRÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'AP6', isim: 'PARDUS PORTFÖY ALTINCI HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'AP7', isim: 'PARDUS PORTFÖY YEDİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ASJ', isim: 'AKTİF PORTFÖY HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BAC', isim: 'ATLAS PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BDI', isim: 'PARDUS PORTFÖY BIST 50 DIŞI ŞİRKETLER HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BDS', isim: 'PARDUS PORTFÖY BIST 30 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BDY', isim: 'AK PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BFT', isim: 'AZİMUT PORTFÖY BANKA VE FİNANS SEKTÖRÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BHA', isim: 'BULLS PORTFÖY HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BHE', isim: 'AK PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BHH', isim: 'PARDUS PORTFÖY BEŞİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BHI', isim: 'BV PORTFÖY ALGORİTMİK STRATEJİLER HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BHL', isim: 'İŞ PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BIA', isim: 'TRİVE PORTFÖY İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BID', isim: 'QNB PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BIG', isim: 'YAPI KREDİ PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BIH', isim: 'PARDUS PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BIO', isim: 'İŞ PORTFÖY SÜRDÜRÜLEBİLİRLİK HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BRH', isim: 'İSTANBUL PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BRT', isim: 'PARDUS PORTFÖY BEREKET HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BSE', isim: 'PARDUS PORTFÖY BIST 30 DIŞI ŞİRKETLER HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BSH', isim: 'ATLAS PORTFÖY BANKACILIK SEKTÖRÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BST', isim: 'PARDUS PORTFÖY BANKACILIK SEKTÖRÜ DIŞI ŞİRKETLER HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BTZ', isim: 'ATLAS PORTFÖY BIST 30 DIŞI ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BUL', isim: 'AKTİF PORTFÖY İNŞAAT SEKTÖRÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BUT', isim: 'AZİMUT PORTFÖY BULUT HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BUY', isim: 'AK PORTFÖY BÜYÜYEN ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BVH', isim: 'BV PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BVI', isim: 'BV PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BVM', isim: 'ALLBATROSS PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'BV1', isim: 'BV PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'CSH', isim: 'PARDUS PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'CSS', isim: 'AZİMUT PORTFÖY CRASSULA HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DAE', isim: 'DENİZ PORTFÖY ARBAU HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DDA', isim: 'DENİZ PORTFÖY BANKACILIK SEKTÖRÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DHI', isim: 'PARDUS PORTFÖY DOKUZUNCU HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DHJ', isim: 'DENİZ PORTFÖY TEKNOLOJİ ŞİRKETLERİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DHS', isim: 'DENİZ PORTFÖY CC HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DKH', isim: 'DENİZ PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DLD', isim: 'DENİZ PORTFÖY SÜRDÜRÜLEBİLİRLİK HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DLZ', isim: 'DENİZ PORTFÖY ALİZE HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DNA', isim: 'DENİZ PORTFÖY ANATOLİA HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DOH', isim: 'TERA PORTFÖY DÖRDÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DRH', isim: 'PARDUS PORTFÖY DÖRDÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DTL', isim: 'DENİZ PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DUH', isim: 'HEDEF PORTFÖY UFUK HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'DXP', isim: 'DENİZ PORTFÖY İHRACATÇI ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'EHS', isim: 'AZİMUT PORTFÖY ERCİYES HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ELZ', isim: 'QİNVEST PORTFÖY KATILIM HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ENJ', isim: 'AKTİF PORTFÖY ENERJİ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FNT', isim: 'HEDEF PORTFÖY MODEL HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FPR', isim: 'STRATEJİ PORTFÖY FOREST HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FRC', isim: 'FONMAP PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FSG', isim: 'FİBA PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FSM', isim: 'FONERİA PORTFÖY BEŞİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FS1', isim: 'FONERİA PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FS2', isim: 'FONERİA PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FS3', isim: 'FONERİA PORTFÖY KATILIM HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FS4', isim: 'FONERİA PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FS5', isim: 'FONERİA PORTFÖY BİRİNCİ İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON(HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FUA', isim: 'AK PORTFÖY İHRACATÇI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'FYF', isim: 'STRATEJİ PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON(HİSSE SENEDİ YOĞUN)' },
+        { kod: 'GBH', isim: 'GARANTİ PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GBJ', isim: 'GARANTİ PORTFÖY BANKACILIK SEKTÖRÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GCD', isim: 'ATLAS PORTFÖY UFUK HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GIE', isim: 'GARANTİ PORTFÖY GARANTİ BBVA İKLİM ENDEKSİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GIH', isim: 'ALLBATROSS PORTFÖY GIDA VE İÇECEK SEKTÖRÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GKG', isim: 'GARANTİ PORTFÖY KAR PAYI ÖDEYEN HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GKL', isim: 'GARANTİ PORTFÖY YF HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GKV', isim: 'GARANTİ PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GLG', isim: 'AKTİF PORTFÖY CAPİTAL HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GNH', isim: 'GLOBAL MD PORTFÖY ALGORİTMİK MODEL HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GNS', isim: 'GARANTİ PORTFÖY ENERJİ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GOH', isim: 'GARANTİ PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GO9', isim: 'FONERİA PORTFÖY BİRİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GRT', isim: 'GARANTİ PORTFÖY TEKNOLOJİ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GTH', isim: 'GARANTİ PORTFÖY İHRACATÇI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GTM', isim: 'GARANTİ PORTFÖY TEMETTÜ ÖDEYEN ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'GZR', isim: 'GARANTİ PORTFÖY SÜRDÜRÜLEBİLİRLİK HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HAT', isim: 'HEDEF PORTFÖY ATLAS İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HBV', isim: 'HEDEF PORTFÖY DORUK HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HDA', isim: 'HEDEF PORTFÖY DÖRDÜNCÜ İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HDH', isim: 'HEDEF PORTFÖY DOĞU HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HDK', isim: 'HEDEF PORTFÖY VEGA İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HEH', isim: 'HEDEF PORTFÖY ALGO EVEREST İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HFI', isim: 'HEDEF PORTFÖY İKİNCİ KATILIM HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HGH', isim: 'HEDEF PORTFÖY GÜNEŞ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HGJ', isim: 'HEDEF PORTFÖY GÜNEY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HGM', isim: 'HEDEF PORTFÖY İKİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HIM', isim: 'HEDEF PORTFÖY İKİNCİ MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HIS', isim: 'HEDEF PORTFÖY İKİNCİ İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HJA', isim: 'AZİMUT PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HKH', isim: 'HEDEF PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HKM', isim: 'HEDEF PORTFÖY BAŞAK HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HKP', isim: 'HEDEF PORTFÖY KATILIM HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HKR', isim: 'HSBC PORTFÖY KIRMIZI HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HLR', isim: 'HEDEF PORTFÖY ADA HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HMG', isim: 'HSBC PYŞ MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST (TL) FON(HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HMK', isim: 'HEDEF PORTFÖY EGE HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HMS', isim: 'HSBC PORTFÖY SÜRDÜRÜLEBİLİRLİK HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HMV', isim: 'HEDEF PORTFÖY MAVİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HNC', isim: 'HEDEF PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HPF', isim: 'HEDEF PORTFÖY KUZEY HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HPI', isim: 'HEDEF PORTFÖY İDEAL HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HPL', isim: 'HEDEF PORTFÖY ÇINAR HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HPZ', isim: 'HEDEF PORTFÖY ZEN HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN)' },
+        { kod: 'HRZ', isim: 'AKTİF PORTFÖY BIST HALKA ARZ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HVA', isim: 'HEDEF PORTFÖY ECE HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HVB', isim: 'HEDEF PORTFÖY PUSULA HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HVC', isim: 'HEDEF PORTFÖY ROTA HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HVL', isim: 'HEDEF PORTFÖY POYRAZ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HVN', isim: 'HEDEF PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'HVZ', isim: 'ALLBATROSS PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IAS', isim: 'QİNVEST PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON(HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IAU', isim: 'PARDUS PORTFÖY İKİNCİ İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ICZ', isim: 'AK PORTFÖY TEKNOLOJİ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IDH', isim: 'İŞ PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IDI', isim: 'AZİMUT PORTFÖY İNŞAAT SEKTÖRÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IEZ', isim: 'INVEO PORTFÖY ELMA HİSSE SENEDİ SERBEST (TL) ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IFN', isim: 'ICBC TURKEY PORTFÖY SÜRDÜRÜLEBİLİRLİK HİSSE SENEDİ FONU(HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHA', isim: 'ALLBATROSS PORTFÖY İKİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHE', isim: 'INVEO PORTFÖY BEYAZ HİSSE SENEDİ SERBEST (TL) ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHK', isim: 'İŞ PORTFÖY İŞ TE KADIN HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHP', isim: 'İSTANBUL PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHT', isim: 'İŞ PORTFÖY İHRACATÇI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHV', isim: 'INVEO PORTFÖY BEŞİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHY', isim: 'İSTANBUL PORTFÖY GMS HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IHZ', isim: 'ALLBATROSS PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IIH', isim: 'İSTANBUL PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IJI', isim: 'İSTANBUL PORTFÖY HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON )' },
+        { kod: 'IMB', isim: 'İSTANBUL PORTFÖY ALGORİTMİK MODEL HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IML', isim: 'İŞ PORTFÖY MODEL PORTFÖY HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'IVF', isim: 'İSTANBUL PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KBP', isim: 'KUVEYT TÜRK PORTFÖY PY KATILIM HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KHA', isim: 'PARDUS PORTFÖY İKİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KHB', isim: 'KARE PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KHC', isim: 'PARDUS PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KHF', isim: 'ALLBATROSS PORTFÖY KATILIM HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KHJ', isim: 'ATLAS PORTFÖY KATILIM HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KHT', isim: 'ALLBATROSS PORTFÖY KARTAL HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KIH', isim: 'KARE PORTFÖY İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KLH', isim: 'ATLAS PORTFÖY KATILIM HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KOT', isim: 'AZİMUT PORTFÖY KOÇ TOPLULUĞU ŞİRKETLERİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KPA', isim: 'KUVEYT TÜRK PORTFÖY KAR PAYI ÖDEYEN KATILIM HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KPC', isim: 'KUVEYT TÜRK PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KPF', isim: 'NEO PORTFÖY KAPADOKYA HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KPH', isim: 'İŞ PORTFÖY KAR PAYI ÖDEYEN HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KPU', isim: 'KUVEYT TÜRK PORTFÖY İKİNCİ KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KST', isim: 'ALLBATROSS PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KTI', isim: 'AZİMUT PORTFÖY KATILIM HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KTS', isim: 'KUVEYT TÜRK PORTFÖY KATILIM HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'KVT', isim: 'AK PORTFÖY ENERJİ ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'LAI', isim: 'ATLAS PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'LCT', isim: 'AZİMUT PORTFÖY ALAÇATI HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'LGO', isim: 'ATLAS PORTFÖY ALGO TOROS HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'LLA', isim: 'ALLBATROSS PORTFÖY AYDIN HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'LZV', isim: 'AZİMUT PORTFÖY İLA HİSSE SENEDİ SERBEST (TL) ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MAS', isim: 'MARMARA CAPİTAL PORTFÖY HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MGB', isim: 'İŞ PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MGD', isim: 'DENİZ PORTFÖY MGD HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MGE', isim: 'PARDUS PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MGH', isim: 'TEB PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MHF', isim: 'MT PORTFÖY BIST HALKA ARZ ŞİRKETLERİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MKA', isim: 'MARMARA CAPİTAL PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MMH', isim: 'AKTİF PORTFÖY BIST 30 ENDEKSİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MP2', isim: 'MT PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MTE', isim: 'MT PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MTF', isim: 'MT PORTFÖY BİRİNCİ İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MTH', isim: 'MT PORTFÖY BİRİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MTU', isim: 'MT PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'MUT', isim: 'GARANTİ PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NDL', isim: 'ALLBATROSS PORTFÖY ANADOLU HİSSE SENEDİ SERBEST (TL) ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NFH', isim: 'NEO PORTFÖY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NFK', isim: 'HEDEF PORTFÖY NEHİR HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NHY', isim: 'NEO PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NKH', isim: 'NEO PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NLE', isim: 'NUROL PORTFÖY EMLAK SEKTÖRÜ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NNF', isim: 'HEDEF PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NOV', isim: 'AZİMUT PORTFÖY INOVA AGRO HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NPH', isim: 'NUROL PORTFÖY BİRİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NSH', isim: 'NUROL PORTFÖY İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'NTD', isim: 'ÜNLÜ PORTFÖY UFT HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'OHI', isim: 'PARDUS PORTFÖY ONUNCU HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'OHK', isim: 'OYAK PORTFÖY KATILIM HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'OJH', isim: 'QİNVEST PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'OMG', isim: 'AZİMUT PORTFÖY İKİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ONE', isim: 'AKTİF PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'OPH', isim: 'OSMANLI PORTFÖY BİRİNCİ HİSSE SENEDİ FONU(HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'OPI', isim: 'OSMANLI PORTFÖY İKİNCİ HİSSE SENEDİ FONU(HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PAO', isim: 'PARDUS PORTFÖY ANADOLU HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PBH', isim: 'PUSULA PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PBN', isim: 'PİRAMİT PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PBY', isim: 'PARDUS PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PCS', isim: 'PUSULA PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PDC', isim: 'PUSULA PORTFÖY DÖRDÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PDG', isim: 'PUSULA PORTFÖY DOĞU HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PGS', isim: 'AZİMUT PORTFÖY PAY GERİ ALIMI YAPAN ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PHE', isim: 'PUSULA PORTFÖY HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PHI', isim: 'PİRAMİT PORTFÖY HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PHK', isim: 'PHİLLİP PORTFÖY KATILIM HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PHN', isim: 'PUSULA PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PHS', isim: 'PERFORM PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PKZ', isim: 'PUSULA PORTFÖY KUZEY HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PMP', isim: 'PARDUS PORTFÖY MODEL PORTFÖY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'POB', isim: 'PARDUS PORTFÖY ONBİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'POF', isim: 'PARDUS PORTFÖY ONALTINCI HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'POH', isim: 'PİRAMİT PORTFÖY ÖZGÜN HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'POI', isim: 'PARDUS PORTFÖY ONİKİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'POS', isim: 'PARDUS PORTFÖY ONBEŞİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'POU', isim: 'PARDUS PORTFÖY ONÜÇÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PO7', isim: 'PARDUS PORTFÖY ONYEDİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PO8', isim: 'PARDUS PORTFÖY ONSEKİZİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PO9', isim: 'PARDUS PORTFÖY ONDOKUZUNCU HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PPB', isim: 'PHİLLİP PORTFÖY BİRİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PPD', isim: 'PERFORM PORTFÖY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PPH', isim: 'PARDUS PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PPM', isim: 'PİRAMİT PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PPO', isim: 'PARDUS PORTFÖY ONDÖRDÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PSR', isim: 'PARDUS PORTFÖY SANAYİ ŞİRKETLERİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PTO', isim: 'PARDUS PORTFÖY TEMETTÜ ÖDEYEN ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'PYR', isim: 'PARDUS PORTFÖY YİRMİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RAI', isim: 'ROTA PORTFÖY ABİS HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RBN', isim: 'RE-PIE PORTFÖY BEŞİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RDF', isim: 'ROTA PORTFÖY DOKUZUNCU HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RDH', isim: 'RE-PIE PORTFÖY DÖRDÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RHI', isim: 'RE-PIE PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RHS', isim: 'ROTA PORTFÖY HİSSE SENEDİ (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RIH', isim: 'RE-PIE PORTFÖY İKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RKH', isim: 'RE-PIE PORTFÖY KATILIM HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RPI', isim: 'ROTA PORTFÖY İKİNCİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RSZ', isim: 'ROTA PORTFÖY SEKİZİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RTA', isim: 'ROTA PORTFÖY ONİKİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RTH', isim: 'RE-PIE PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RUH', isim: 'RE-PIE PORTFÖY ÜÇÜNCÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RVI', isim: 'ROTA PORTFÖY ONALTINCI HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RVS', isim: 'ROTA PORTFÖY ONBEŞİNCİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RYA', isim: 'ALLBATROSS PORTFÖY ARYA HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'RYF', isim: 'ROTA PORTFÖY YEDİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SAS', isim: 'AK PORTFÖY SABANCI TOPLULUĞU ŞİRKETLERİ ENDEKSİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SBH', isim: 'SPARTA PORTFÖY BİRİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SHI', isim: 'PARDUS PORTFÖY SEKİZİNCİ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SHS', isim: 'AZİMUT PORTFÖY SENTEZ HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SNY', isim: 'ATLAS PORTFÖY SANAYİ SEKTÖRÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SPN', isim: 'AZİMUT PORTFÖY İSTATİSTİKSEL ARBİTRAJ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SRL', isim: 'PARDUS PORTFÖY SÜRDÜRÜLEBİLİRLİK HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SSE', isim: 'ATLAS PORTFÖY HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SSS', isim: 'YAPI KREDİ PORTFÖY SAVUNMA SANAYİİ ŞİRKETLERİ ENDEKSİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'STZ', isim: 'STRATEJİ PORTFÖY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'SVY', isim: 'DENİZ PORTFÖY TTSVY HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'THD', isim: 'TRIVE PORTFÖY BİRİNCİ HİSSE SENEDİ (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'THF', isim: 'TERA PORTFÖY HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'THH', isim: 'DENİZ PORTFÖY CCO HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'THT', isim: 'TRİVE PORTFÖY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'THV', isim: 'ATA PORTFÖY BARBAROS HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'TMH', isim: 'ALLBATROSS PORTFÖY ATMACA HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'TPR', isim: 'İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'TRN', isim: 'AZİMUT PORTFÖY CO HİSSE SENEDİ SERBEST ÖZEL FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'T3B', isim: 'TERA PORTFÖY ÜÇÜNCÜ  HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN)' },
+        { kod: 'VAY', isim: 'AK PORTFÖY DEĞER ODAKLI 100 ŞİRKETLERİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YCP', isim: 'YAPI KREDİ PORTFÖY BANKACILIK SEKTÖRÜ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YHB', isim: 'YAPI KREDİ PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YHI', isim: 'YAPI KREDİ PORTFÖY İNŞAAT SEKTÖRÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YHK', isim: 'YAPI KREDİ PORTFÖY KATILIM HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YHZ', isim: 'YAPI KREDİ PORTFÖY BIST TEKNOLOJİ AĞIRLIK SINIRLAMALI ENDEKSİ HİSSE SENEDİ FONU ( HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YLE', isim: 'YAPI KREDİ PORTFÖY BIST SÜRDÜRÜLEBİLİRLİK ENDEKSİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YLY', isim: 'YAPI KREDİ PORTFÖY KİLYOS KAR PAYI ÖDEYEN HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YMH', isim: 'YAPI KREDİ PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YPR', isim: 'AZİMUT PORTFÖY YILDIZ PAZAR ŞİRKETLERİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YUB', isim: 'YAPI KREDİ PORTFÖY KARAKÖY HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'YZH', isim: 'TEB PORTFÖY BIST BANKA ENDEKSİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN)' },
+        { kod: 'ZBN', isim: 'ZİRAAT PORTFÖY HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ZBO', isim: 'ZİRAAT PORTFÖY MUTLAK GETİRİ HEDEFLİ HİSSE SENEDİ SERBEST FON (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ZHH', isim: 'ZİRAAT PORTFÖY HALKBANK SÜRDÜRÜLEBİLİRLİK 30 ŞİRKETLERİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ZJL', isim: 'ZİRAAT PORTFÖY BIST 100 DIŞI ŞİRKETLER HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ZJV', isim: 'ZİRAAT PORTFÖY BIST 30 DIŞI YILDIZ PAZAR ŞİRKETLERİ HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ZLH', isim: 'ZİRAAT PORTFÖY BIST 100-30 ŞİRKETLERİ HİSSE SENEDİ FONU ( HİSSE SENEDİ YOĞUN FON)' },
+        { kod: 'ZPJ', isim: 'ZİRAAT PORTFÖY KATILIM HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)' }
+
     ],
     'hisse': [
-        { kod: 'THY', isim: 'TÜRK HAVA YOLLARI A.O.' },
-        { kod: 'ZB', isim: 'ZİRAAT BANKASI A.Ş.' },
-        { kod: 'GA', isim: 'GARANTİ BANKASI A.Ş.' },
-        { kod: 'THYAO', isim: 'TÜRK HAVA YOLLARI A.O.' },
-        { kod: 'GARAN', isim: 'GARANTİ BANKASI A.Ş.' },
-        { kod: 'ASELS', isim: 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.' },
-        { kod: 'SISE', isim: 'ŞİŞE VE CAM FABRİKALARI A.Ş.' },
-        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
-        { kod: 'CWENE', isim: 'CENGIZ ENERJİ ELEKTRİK ÜRETİM A.Ş.' },
-        { kod: 'AKBNK', isim: 'AKBANK T.A.Ş.' },
-        { kod: 'ISCTR', isim: 'TÜRK EKONOMİ BANKASI A.Ş.' },
-        { kod: 'HALKB', isim: 'HALKBANK A.Ş.' },
-        { kod: 'VAKBN', isim: 'VEKİLETEN BANKASI A.Ş.' },
-        { kod: 'YKBNK', isim: 'YAPI KREDİ BANKASI A.Ş.' },
-        { kod: 'ARCLK', isim: 'ARÇELİK A.Ş.' },
-        { kod: 'KCHOL', isim: 'KOÇ HOLDİNG A.Ş.' }
+        { kod: 'AEFES', isim: 'ANADOLU EFES BİRACILIK' },
+        { kod: 'AFYON', isim: 'AFYON ÇİMENTO' },
+        { kod: 'AGYO', isim: 'ATAKULE GAYRIMENKUL YAT.ORT.A.' },
+        { kod: 'AKALT', isim: 'AKAL TEKSTİL' },
+        { kod: 'AKBNK', isim: 'AKBANK' },
+        { kod: 'AKBYO', isim: 'AK YATIRIM ORTAKLIĞI' },
+        { kod: 'AKCNS', isim: 'AKÇANSA' },
+        { kod: 'AKENR', isim: 'AK ENERJİ ELEKTRİK ÜRT. OTP.A.' },
+        { kod: 'AKFEN', isim: 'AKFEN HOLDİNG A.Ş' },
+        { kod: 'AKGRT', isim: 'AK SİGORTA' },
+        { kod: 'AKSA', isim: 'AKSA AKRİLİK KİMYA' },
+        { kod: 'AKSEN', isim: 'AKSA ENERJİ ÜRETİM A.Ş' },
+        { kod: 'ALARK', isim: 'ALARKO HOLDİNG' },
+        { kod: 'ALBRK', isim: 'ALBARAKA TÜRK KATILIM BANK.A.Ş' },
+        { kod: 'ALCAR', isim: 'ALARKO SANAYİ' },
+        { kod: 'ALGYO', isim: 'ALARKO G.MENKUL Y.O.' },
+        { kod: 'ALKIM', isim: 'ALKİM KİMYA SAN' },
+        { kod: 'ALTIN', isim: 'ALTINYILDIZ MENSUCAT' },
+        { kod: 'ANELT', isim: 'ANEL TEL ELK SİS SAN TİC AŞ' },
+        { kod: 'ANHYT', isim: 'ANADOLU HAYAT' },
+        { kod: 'ANSGR', isim: 'ANADOLU SİGORTA' },
+        { kod: 'ARCLK', isim: 'ARÇELİK' },
+        { kod: 'ARENA', isim: 'ARENA BİLGİSAYAR SAN.VE TİC.A.' },
+        { kod: 'ASELS', isim: 'ASELSAN' },
+        { kod: 'ASUZU', isim: 'ASUZU' },
+        { kod: 'ASYAB', isim: 'ASYA KATILIM BANKASI AŞ' },
+        { kod: 'ATAYO', isim: 'ATA GAYRİMENKUL YATIRIM ORTAKL' },
+        { kod: 'AYEN', isim: 'AYEN ENERJİ' },
+        { kod: 'AYGAZ', isim: 'AYGAZ' },
+        { kod: 'BAGFS', isim: 'BAĞFAŞ' },
+        { kod: 'BAKAB', isim: 'BAK AMBALAJ SAN A.Ş.' },
+        { kod: 'BANVT', isim: 'BANVİT' },
+        { kod: 'BFREN', isim: 'BOSCH FREN SİSTEMLERİ' },
+        { kod: 'BIMAS', isim: 'BİM BİRLEŞİK MAĞ AŞ' },
+        { kod: 'BJKAS', isim: 'BESIKTAS FUTBOL YATIRIMLARI A.' },
+        { kod: 'BOYNR', isim: 'BOYNER BUYUK MAGAZACILIK A.Ş.' },
+        { kod: 'BRISA', isim: 'BRİSA' },
+        { kod: 'BRSAN', isim: 'BORUSAN MANNESMANN' },
+        { kod: 'BUCIM', isim: 'BURSA ÇİMENTO' },
+        { kod: 'CCOLA', isim: 'COCA-COLA İÇECEK A.Ş.' },
+        { kod: 'CEMAS', isim: 'ÇEMAŞ DÖKÜM' },
+        { kod: 'CLEBI', isim: 'ÇELEBİ HAVA SERVİSİ' },
+        { kod: 'CMBTN', isim: 'ÇİMBETON SANAYİ' },
+        { kod: 'COMDO', isim: 'COMPONENTA DÖKÜMCÜLÜK TİC.VE S' },
+        { kod: 'DEVA', isim: 'DEVA HOLDİNG' },
+        { kod: 'DGGYO', isim: 'DOĞUŞ-GE GAYRİMENKUL YATIRIM O' },
+        { kod: 'DJIST.F', isim: 'DOW JONES İSTANBUL 20 A TİPİ' },
+        { kod: 'DOAS', isim: 'DOĞUŞ OTOMOTİV' },
+        { kod: 'DOHOL', isim: 'DOĞAN HOLDİNG' },
+        { kod: 'DYHOL', isim: 'DOĞAN YAYINCILIK A.Ş.' },
+        { kod: 'DYOBY', isim: 'DYO BOYA FABRİKALARI SAN.VE.Tİ' },
+        { kod: 'ECBYO', isim: 'ECZACIBAŞI YATIRIM ORTAKLIĞI' },
+        { kod: 'ECILC', isim: 'ECZACIBAŞI İLAÇ' },
+        { kod: 'ECZYT', isim: 'ECZCIBAŞI YATIRIM' },
+        { kod: 'EGCYO', isim: 'EGELİ CO TARIM GİRİŞİM SERMAYE' },
+        { kod: 'EGEEN', isim: 'EGE ENDUSTRİ' },
+        { kod: 'EGGUB', isim: 'EGE GÜBRE' },
+        { kod: 'EKGYO', isim: 'EMLAK KONUT GAYRİMENKUL YATIRI' },
+        { kod: 'ENKA', isim: 'ENKA HOLDİNG' },
+        { kod: 'ENKAI', isim: 'ENKA INSAAT VE SAN A.Ş.' },
+        { kod: 'EREGL', isim: 'EREĞLİ DEMİR ÇELİK' },
+        { kod: 'FENER', isim: 'FB SPORTIF HIZ.SAN.VE TIC.A.Ş.' },
+        { kod: 'FROTO', isim: 'FORD OTOMOTIV SAN.A.Ş.' },
+        { kod: 'GARAN', isim: 'GARANTİ BANKASI' },
+        { kod: 'GLYHO', isim: 'GLOBAL YATIRIM HOLDING A.Ş' },
+        { kod: 'GOLTS', isim: 'GÖLTAŞ ÇİMENTO' },
+        { kod: 'GOODY', isim: 'GOOD-YEAR' },
+        { kod: 'GOZDE', isim: 'GÖZDE GİRİŞİM SERMAYE YATIRIM' },
+        { kod: 'GRNYO', isim: 'GARANTİ YATIRIM ORT.' },
+        { kod: 'GSDHO', isim: 'GSD HOLDİNG' },
+        { kod: 'GSRAY', isim: 'GALATASARAY SPORTIF A.Ş.' },
+        { kod: 'GUBRF', isim: 'GÜBRE FABRİKALARI' },
+        { kod: 'HALKB', isim: 'T.HALK BANKASI AŞ.' },
+        { kod: 'HURGZ', isim: 'HÜRRİYET GAZETECİLİK' },
+        { kod: 'IHEVA', isim: 'İHLAS EV ALETLERİ' },
+        { kod: 'IHGZT', isim: 'IHLAS GAZETECİLİK A.Ş' },
+        { kod: 'IHLAS', isim: 'IHLAS HOLDİNG A.Ş.' },
+        { kod: 'ISCTR', isim: 'T. ISBANK(C)' },
+        { kod: 'ISFIN', isim: 'IS FINANSAL KIRALAMA A.S' },
+        { kod: 'ISGYO', isim: 'İŞ GAYRİMENKUL Y.O. A.Ş.' },
+        { kod: 'ISYAT', isim: 'İŞ BANKASI YATIRIMORT.' },
+        { kod: 'ISYHO', isim: 'IŞIKLAR YATIRIM HOLDİNG A.Ş' },
+        { kod: 'ITTFH', isim: 'İTTİFAK HOLDİNG A.Ş' },
+        { kod: 'IZMDC', isim: 'İZMİR DEMİR ÇELİK' },
+        { kod: 'KARSN', isim: 'KARSAN OTOMOTİV' },
+        { kod: 'KARTN', isim: 'KARTONSAN' },
+        { kod: 'KCHOL', isim: 'KOÇ HOLDİNG' },
+        { kod: 'KLGYO', isim: 'KİLER GMYO' },
+        { kod: 'KONYA', isim: 'KONYA ÇİMENTO' },
+        { kod: 'KORDS', isim: 'KORDSA' },
+        { kod: 'KOZAA', isim: 'KOZA ANADOLU METAL MADENCİLİK' },
+        { kod: 'KRDMD', isim: 'KARABÜK DEMİR ÇELİK SAN.' },
+        { kod: 'KRSTL', isim: 'KRİSTAL KOLA VE MEŞ.SANTİC A.Ş' },
+        { kod: 'MARTI', isim: 'MARTI OTEL İŞLETMERİ A.Ş.' },
+        { kod: 'METRO', isim: 'METRO HOLDİNG' },
+        { kod: 'MGROS', isim: 'MİGROS' },
+        { kod: 'MIPAZ', isim: 'MİLPA' },
+        { kod: 'MNDRS', isim: 'MENDERES TEKSTIL' },
+        { kod: 'MRDIN', isim: 'MARDİN ÇİMENTO' },
+        { kod: 'MUTLU', isim: 'MUTLU AKÜ VE MALZ.SAN.A.Ş.' },
+        { kod: 'NETAS', isim: 'NETAŞ' },
+        { kod: 'NTHOL', isim: 'NET HOLDİNG' },
+        { kod: 'NTTUR', isim: 'NET TURİZM' },
+        { kod: 'ODAS', isim: 'ODAŞ ELEKTRİK ÜRETİM AŞ' },
+        { kod: 'OTKAR', isim: 'OTOKAR' },
+        { kod: 'OYAYO', isim: 'OYAK YATIRIM ORTAKLIĞI AŞ.' },
+        { kod: 'PAGYO', isim: 'PANORA GAYRİMENKUL YATIRIM ORTAKLIĞI AŞ' },
+        { kod: 'PEGYO', isim: 'PERA GAYRIMENKUL YAT.ORT.' },
+        { kod: 'PETKM', isim: 'PETKİM' },
+        { kod: 'PNSUT', isim: 'PINAR SÜT' },
+        { kod: 'PRKAB', isim: 'PİRELLİ KABLO A.Ş.' },
+        { kod: 'PRKME', isim: 'PARK ELEKTRIK MADENCILIK TEKST' },
+        { kod: 'PTOFS', isim: 'PETROL OFİSİ A.Ş.' },
+        { kod: 'RHEAG', isim: 'RHEA GİRİŞİM' },
+        { kod: 'ROYAL', isim: 'ROYAL HALI İPLİK TEKSTİL MOBİLYA SAN. TİC.AŞ' },
+        { kod: 'RYSAS', isim: 'REYSAŞ TAŞIMACILIK' },
+        { kod: 'SAFGY', isim: 'SAF GMYO' },
+        { kod: 'SAHOL', isim: 'SABANCI HOLDİNG' },
+        { kod: 'SANKO', isim: 'SANKO PAZARLAMA İTHALAT İHRACA' },
+        { kod: 'SASA', isim: 'SASA SUNİ ELYAF' },
+        { kod: 'SISE', isim: 'T. ŞİŞE CAM' },
+        { kod: 'SKBNK', isim: 'ŞEKERBANK' },
+        { kod: 'SNGYO', isim: 'SİNPAŞ GAYRİMENKUL YAT.ORT.AŞ.' },
+        { kod: 'SODA', isim: 'SODA SAN VE TİC A.Ş.' },
+        { kod: 'TATKS', isim: 'TAT KONSERVECİLİK' },
+        { kod: 'TAVHL', isim: 'TAV HAVALİMANLARI HOLDİNG AŞ.' },
+        { kod: 'TCELL', isim: 'TURKCELL İLETİŞİM HİZ.A.Ş.' },
+        { kod: 'TEBNK', isim: 'TÜRK EKONOMİ BANKASI' },
+        { kod: 'TEKST', isim: 'TEKSTİLBANK' },
+        { kod: 'TEKTU', isim: 'TEK- ART TURİZM A.Ş' },
+        { kod: 'THYAO', isim: 'TÜRK HAVA YOLLARI' },
+        { kod: 'TIRE', isim: 'TİRE KUTSAN' },
+        { kod: 'TKFEN', isim: 'TEKFEN HOLDİNG AŞ.' },
+        { kod: 'TOASO', isim: 'TOFAŞ OTO FABRİKALARI' },
+        { kod: 'TRCAS', isim: 'TURCAS PETROL A.S.' },
+        { kod: 'TRGYO', isim: 'TORUNLAR GMYO' },
+        { kod: 'TRKCM', isim: 'TRAKYA CAM' },
+        { kod: 'TSKB', isim: 'T.SINAİ  KALKINMA BANKASI.' },
+        { kod: 'TSPOR', isim: 'TRABZON SPORTİF A.Ş' },
+        { kod: 'TTKOM', isim: 'TÜRK TELEKOMÜNİKASYON A.Ş.' },
+        { kod: 'TTRAK', isim: 'TÜRK TRAKTÖR VE ZİRAAT MAK.AŞ' },
+        { kod: 'TUPRS', isim: 'TÜPRAŞ' },
+        { kod: 'UCAK', isim: 'USAŞ' },
+        { kod: 'ULKER', isim: 'ÜLKER GIDA SAN. VE TİC.A.Ş.' },
+        { kod: 'UNYEC', isim: 'ÜNYE ÇİMENTO' },
+        { kod: 'VAKBN', isim: 'TÜRKİYE VAKIFLAR BANKASI T.A.O' },
+        { kod: 'VESBE', isim: 'VESTEL BEYAZ EŞYA A.Ş' },
+        { kod: 'VESTL', isim: 'VESTEL' },
+        { kod: 'YAZIC', isim: 'YAZICILAR OTO VE GIDA YAT AŞ' },
+        { kod: 'YKBNK', isim: 'YAPI KREDİ BANKASI' },
+        { kod: 'YKSGR', isim: 'YAPI KREDİ SİGORTA A.Ş.' },
+        { kod: 'ZOREN', isim: 'ZORLU ENERJI' }
     ],
     'altin': [
         { kod: 'GA', isim: 'Gram Altın' },
@@ -505,22 +1085,22 @@ function handleInvestmentTypeChange() {
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
-    
+
     console.log('Elements found:', {
         tipSelect: !!tipSelect,
         kodInput: !!kodInput,
         kodOrnekleri: !!kodOrnekleri,
         validateBtn: !!validateBtn
     });
-    
+
     if (!tipSelect || !kodInput) {
         console.log('Missing essential elements, returning');
         return;
     }
-    
+
     const tip = tipSelect.value;
     console.log('Selected investment type:', tip);
-    
+
     const ornekler = {
         'fon': {
             placeholder: 'Fon kodu girin (örn: TLI, TI2, AFA, TTE...)',
@@ -539,66 +1119,66 @@ function handleInvestmentTypeChange() {
             ornekler: 'Örnek: USD, EUR, GBP, CHF, JPY - Yazmaya başlayın...'
         }
     };
-    
+
     if (tip && ornekler[tip]) {
         console.log('ENABLING code input for type:', tip);
-        
+
         // Enable and configure the code input
         console.log('Before enable - disabled status:', kodInput.disabled);
         kodInput.disabled = false;
         kodInput.removeAttribute('disabled');
         console.log('After enable - disabled status:', kodInput.disabled);
-        
+
         kodInput.placeholder = ornekler[tip].placeholder;
         console.log('Set placeholder to:', ornekler[tip].placeholder);
-        
+
         // Show examples
         if (kodOrnekleri) {
             kodOrnekleri.innerHTML = `<i class="fas fa-info-circle me-1"></i>${ornekler[tip].ornekler}`;
             kodOrnekleri.style.display = 'block';
             console.log('Examples shown');
         }
-        
+
         // Show validate button
         if (validateBtn) {
             validateBtn.style.display = 'block';
             console.log('Validate button shown');
         }
-        
+
         console.log('Code input should now be ENABLED');
     } else {
         console.log('DISABLING code input - tip is empty or invalid');
-        
+
         // Disable the code input
         console.log('Before disable - disabled status:', kodInput.disabled);
         kodInput.disabled = true;
         kodInput.setAttribute('disabled', 'disabled');
         console.log('After disable - disabled status:', kodInput.disabled);
-        
+
         kodInput.placeholder = 'Önce yatırım tipi seçin...';
         console.log('Set placeholder to: Önce yatırım tipi seçin...');
-        
+
         // Hide examples
         if (kodOrnekleri) {
             kodOrnekleri.style.display = 'none';
             console.log('Examples hidden');
         }
-        
+
         // Hide validate button
         if (validateBtn) {
             validateBtn.style.display = 'none';
             console.log('Validate button hidden');
         }
-        
+
         console.log('Code input should now be DISABLED');
     }
-    
+
     // Clear previous values and results
     kodInput.value = '';
     const kodSonuc = document.getElementById('kodSonuc');
     const searchResults = document.getElementById('searchResults');
     const alisFiyati = document.getElementById('alis_fiyati');
-    
+
     if (kodSonuc) kodSonuc.style.display = 'none';
     if (searchResults) searchResults.style.display = 'none';
     if (alisFiyati) alisFiyati.value = '';
@@ -619,15 +1199,15 @@ function forceActivateCodeInput() {
     console.log('>>> FORCE ACTIVATION BUTTON CLICKED');
     const tipSelect = document.getElementById('tip');
     const currentType = tipSelect ? tipSelect.value : '';
-    
+
     if (!currentType || currentType === '') {
         alert('Lütfen önce bir yatırım tipi seçin!');
         return;
     }
-    
+
     console.log('Forcing activation for type:', currentType);
     updateFormBasedOnType(currentType);
-    
+
     // Extra force enable
     const kodInput = document.getElementById('kod');
     if (kodInput) {
@@ -641,44 +1221,43 @@ function forceActivateCodeInput() {
 // Simplified form update function
 function updateFormBasedOnType(selectedType) {
     console.log('=== UPDATING FORM FOR TYPE:', selectedType, '===');
-    
+
     const kodInput = document.getElementById('kod');
     const kodOrnekleri = document.getElementById('kodOrnekleri');
     const validateBtn = document.getElementById('validateBtn');
-    
+
     if (!kodInput) {
         console.error('Kod input not found!');
         return;
     }
-    
+
     if (!selectedType || selectedType === '') {
         console.log('No type selected, disabling input');
         kodInput.disabled = true;
-        kodInput.placeholder = "Önce yatırım tipi seçin...";
-        if (kodOrnekleri) kodOrnekleri.style.display = 'none';
+        kodInput.placeholder = "Önce yatırım tipi seçin...";        if (kodOrnekleri) kodOrnekleri.style.display = 'none';
         if (validateBtn) validateBtn.style.display = 'none';
         return;
     }
-    
+
     // Enable the input and set appropriate placeholder
     console.log('ENABLING INPUT for type:', selectedType);
     kodInput.disabled = false;
     kodInput.removeAttribute('disabled');
-    
+
     // Clear previous code when type changes
     kodInput.value = '';
-    
+
     // Hide search results and validation results
     const searchResults = document.getElementById('searchResults');
     const kodSonuc = document.getElementById('kodSonuc');
     if (searchResults) searchResults.style.display = 'none';
     if (kodSonuc) kodSonuc.style.display = 'none';
-    
-    // Set placeholders and examples based on type
+
+    // Set placeholders and examplesbased on type
     const typeConfig = {
         'fon': {
-            placeholder: 'Örn: TI2, AFA, TLI',
-            examples: 'Örnekler: TI2 (İş Portföy BIST-30), AFA (Ak Portföy Petkim), TLI (Türkiye İş Portföy Likit)'
+            placeholder: 'Örn: ZBJ, YPT',
+            examples: 'Örnekler: (ZBJ) ZİRAAT PORTFÖY BAŞAK PARA PİYASASI (TL) FONU, YPT (YAPI KREDİ ASSET MANAGEMENT MONEY MARKET Fund)'
         },
         'hisse': {
             placeholder: 'Örn: THYAO, ISCTR, GARAN',
@@ -693,7 +1272,7 @@ function updateFormBasedOnType(selectedType) {
             examples: 'Örnekler: USD (Amerikan Doları), EUR (Euro), GBP (İngiliz Sterlini)'
         }
     };
-    
+
     const config = typeConfig[selectedType];
     if (config) {
         kodInput.placeholder = config.placeholder;
@@ -702,9 +1281,9 @@ function updateFormBasedOnType(selectedType) {
             kodOrnekleri.style.display = 'block';
         }
     }
-    
+
     if (validateBtn) validateBtn.style.display = 'inline-block';
-    
+
     // Re-add event handlers to the now-enabled input
     kodInput.oninput = function() {
         console.log('Code input changed:', this.value);
@@ -714,12 +1293,12 @@ function updateFormBasedOnType(selectedType) {
         console.log('Code input lost focus, validating...');
         validateCode();
     };
-    
+
     // Also add keyup event for better responsiveness
     kodInput.onkeyup = function() {
         searchCodes(this.value);
     };
-    
+
     console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
 }
 
@@ -731,37 +1310,37 @@ document.addEventListener('DOMContentLoaded', function() {
     if (dateInput && !dateInput.value) {
         dateInput.value = today;
     }
-    
+
     // Function to initialize modal form
     function initializeModalForm() {
         console.log('=== INITIALIZING MODAL FORM ===');
-        
+
         const tipSelect = document.getElementById('tip');
         const kodInput = document.getElementById('kod');
-        
+
         if (!tipSelect || !kodInput) {
             console.error('Required elements not found:', {tipSelect: !!tipSelect, kodInput: !!kodInput});
             return;
         }
-        
+
         // Initialize code input as disabled
         kodInput.disabled = true;
         kodInput.placeholder = "Önce yatırım tipi seçin...";
-        
+
         console.log('Setting up DIRECT event handling...');
-        
+
         // Method 1: Direct onchange override
         tipSelect.onchange = function() {
             console.log('>>> DIRECT ONCHANGE FIRED! New value:', this.value);
             updateFormBasedOnType(this.value);
         };
-        
+
         // Method 2: addEventListener as backup
         tipSelect.addEventListener('change', function() {
             console.log('>>> ADDEVENTLISTENER CHANGE FIRED! New value:', this.value);
             updateFormBasedOnType(this.value);
         });
-        
+
         // Method 3: Simple polling as final backup
         let lastKnownValue = tipSelect.value;
         const checkInterval = setInterval(function() {
@@ -771,7 +1350,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateFormBasedOnType(tipSelect.value);
             }
         }, 300);
-        
+
         // Cleanup on modal close
         const modal = document.getElementById('yatirimEkleModal');
         if (modal) {
@@ -779,83 +1358,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearInterval(checkInterval);
             });
         }
-        
+
         console.log('Event handlers set up. Initial state update...');
         updateFormBasedOnType(tipSelect.value);
     }
-    
-    // Simplified form update function
-    function updateFormBasedOnType(selectedType) {
-        console.log('=== UPDATING FORM FOR TYPE:', selectedType, '===');
-        
-        const kodInput = document.getElementById('kod');
-        const kodOrnekleri = document.getElementById('kodOrnekleri');
-        const validateBtn = document.getElementById('validateBtn');
-        
-        if (!kodInput) {
-            console.error('Kod input not found!');
-            return;
-        }
-        
-        if (!selectedType || selectedType === '') {
-            console.log('No type selected, disabling input');
-            kodInput.disabled = true;
-            kodInput.placeholder = "Önce yatırım tipi seçin...";
-            if (kodOrnekleri) kodOrnekleri.style.display = 'none';
-            if (validateBtn) validateBtn.style.display = 'none';
-            return;
-        }
-        
-        // Enable the input and set appropriate placeholder
-        console.log('ENABLING INPUT for type:', selectedType);
-        kodInput.disabled = false;
-        kodInput.removeAttribute('disabled');
-        
-        // Set placeholders and examples based on type
-        const typeConfig = {
-            'fon': {
-                placeholder: 'Örn: TI2, AFA, TLI',
-                examples: 'Örnekler: TI2 (İş Portföy BIST-30), AFA (Ak Portföy Petkim), TLI (Türkiye İş Portföy Likit)'
-            },
-            'hisse': {
-                placeholder: 'Örn: THYAO, ISCTR, GARAN',
-                examples: 'Örnekler: THYAO (Türk Hava Yolları), ISCTR (İş Bankası C), GARAN (Garanti BBVA)'
-            },
-            'altin': {
-                placeholder: 'Örn: GA, C, Y, T',
-                examples: 'Örnekler: GA (Gram Altın), C (Çeyrek Altın), Y (Yarım Altın), T (Tam Altın)'
-            },
-            'doviz': {
-                placeholder: 'Örn: USD, EUR, GBP',
-                examples: 'Örnekler: USD (Amerikan Doları), EUR (Euro), GBP (İngiliz Sterlini)'
-            }
-        };
-        
-        const config = typeConfig[selectedType];
-        if (config) {
-            kodInput.placeholder = config.placeholder;
-            if (kodOrnekleri) {
-                kodOrnekleri.textContent = config.examples;
-                kodOrnekleri.style.display = 'block';
-            }
-        }
-        
-        if (validateBtn) validateBtn.style.display = 'inline-block';
-        
-        // Re-add event handlers to the now-enabled input
-        kodInput.oninput = function() {
-            searchCodes(this.value);
-        };
-        kodInput.onblur = function() {
-            validateCode();
-        };
-        
-        console.log('Form updated successfully. Input enabled:', !kodInput.disabled);
-    }
-    
+
     // Initialize on page load
     initializeModalForm();
-    
+
+    // Initialize real-time filtering
+    initializeRealTimeFiltering();
+
     // Re-initialize when modal is shown
     const modal = document.getElementById('yatirimEkleModal');
     if (modal) {
@@ -872,26 +1385,26 @@ function searchCodes(query) {
     const modalTipSelect = document.querySelector('#yatirimEkleModal #tip');
     const tip = modalTipSelect ? modalTipSelect.value : '';
     const searchResults = document.getElementById('searchResults');
-    
+
     console.log('Search query:', query, 'Type:', tip);
     console.log('SearchResults element:', !!searchResults);
-    
+
     if (!tip || query.length < 1) {
         console.log('No type or query too short, hiding results');
         if (searchResults) searchResults.style.display = 'none';
         return;
     }
-    
+
     const codes = investmentCodes[tip] || [];
     console.log('Available codes for type', tip, ':', codes.length, codes);
-    
+
     const filteredCodes = codes.filter(item => 
         item.kod.toLowerCase().includes(query.toLowerCase()) ||
         item.isim.toLowerCase().includes(query.toLowerCase())
     );
-    
+
     console.log('Filtered codes:', filteredCodes.length, filteredCodes);
-    
+
     if (filteredCodes.length > 0) {
         const html = filteredCodes.map(item => `
             <a href="#" class="list-group-item list-group-item-action" onclick="selectCode('${item.kod}', '${item.isim}')">
@@ -902,7 +1415,7 @@ function searchCodes(query) {
                 <p class="mb-1">${item.isim}</p>
             </a>
         `).join('');
-        
+
         console.log('Setting HTML and showing results');
         searchResults.innerHTML = html;
         searchResults.style.display = 'block';
@@ -924,19 +1437,19 @@ function validateCode() {
     const tip = modalTipSelect ? modalTipSelect.value : '';
     const kod = document.getElementById('kod').value.toUpperCase();
     const kodSonuc = document.getElementById('kodSonuc');
-    
+
     if (!tip || !kod) {
         kodSonuc.style.display = 'none';
         return;
     }
-    
+
     // Update the input to uppercase
     document.getElementById('kod').value = kod;
-    
+
     // Check if code exists in predefined list first
     const codes = investmentCodes[tip] || [];
     const foundCode = codes.find(item => item.kod === kod);
-    
+
     if (!foundCode) {
         kodSonuc.innerHTML = `
             <div class="alert alert-warning">
@@ -948,7 +1461,7 @@ function validateCode() {
         kodSonuc.style.display = 'block';
         return;
     }
-    
+
     // Show loading
     kodSonuc.innerHTML = `
         <div class="alert alert-info">
@@ -957,7 +1470,7 @@ function validateCode() {
         </div>
     `;
     kodSonuc.style.display = 'block';
-    
+
     // Make AJAX request to validate and get current price
     fetch('/api/yatirim_dogrula', {
         method: 'POST',
@@ -981,7 +1494,7 @@ function validateCode() {
                 </div>
             `;
             document.getElementById('alis_fiyati').value = data.guncel_fiyat.toFixed(6);
-            
+
             // Auto-hide success alert after 5 seconds
             setTimeout(() => {
                 const alert = kodSonuc.querySelector('.alert');
@@ -1000,7 +1513,7 @@ function validateCode() {
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
                 </div>
             `;
-            
+
             // Auto-dismiss after 10 seconds
             setTimeout(() => {
                 const alert = kodSonuc.querySelector('.alert');
@@ -1029,12 +1542,853 @@ function validateCode() {
 document.addEventListener('click', function(event) {
     const searchResults = document.getElementById('searchResults');
     const kodInput = document.getElementById('kod');
-    
-    if (!searchResults.contains(event.target) && event.target !== kodInput) {
+
+    if (searchResults && kodInput && !searchResults.contains(event.target) && event.target !== kodInput) {
         searchResults.style.display = 'none';
     }
 });
 
+// Investment detail function (referenced in some old templates)
+function showInvestmentDetail(yatirimId) {
+    console.log('Show investment detail called for ID:', yatirimId);
+    // This function can be implemented later if needed
+    // For now, just log to prevent console errors
+}
 
+// Function to open a modal on top of another modal (layered modals)
+function openModalOnTop(targetModalId) {
+    const detailModal = document.getElementById('detailModal');
+    const targetModal = document.getElementById(targetModalId);
+
+    if (!detailModal || !targetModal) {
+        console.error('Required modals not found');
+        return;
+    }
+
+    // Keep the detail modal open and layer the new modal on top
+    targetModal.style.zIndex = '1070';
+
+    // Create and show the target modal with higher z-index
+    const targetModalInstance = new bootstrap.Modal(targetModal, {
+        backdrop: 'static',
+        keyboard: false
+    });
+
+    targetModalInstance.show();
+
+    // Handle backdrop z-index after modal is shown
+    targetModal.addEventListener('shown.bs.modal', function() {
+        // Find and adjust backdrop z-index
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            console.log('Found backdrops:', backdrops.length);
+
+            if (backdrops.length >= 2) {
+                // First backdrop (detail modal) should be lower
+                backdrops[0].style.zIndex = '1054';
+                // Second backdrop (edit modal) should be higher
+                backdrops[1].style.zIndex = '1069';
+
+                console.log('Backdrop z-indexes set:', {
+                    first: backdrops[0].style.zIndex,
+                    second: backdrops[1].style.zIndex
+                });
+            }
+        }, 100);
+    }, { once: true });
+
+    // Handle when the top modal is closed - restore focus to detail modal
+    targetModal.addEventListener('hidden.bs.modal', function() {
+        // Reset z-index
+        targetModal.style.zIndex = '';
+
+        // Clean up backdrop z-indexes and extra backdrops
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            console.log('Cleaning up backdrops:', backdrops.length);
+
+            // Remove all but the first backdrop
+            if (backdrops.length > 1) {
+                for (let i = 1; i < backdrops.length; i++) {
+                    backdrops[i].remove();
+                }
+            }
+
+            // Ensure detail modal remains visible and focused
+            if (detailModal.classList.contains('show')) {
+                detailModal.style.zIndex = '1055';
+
+                // Ensure there's a backdrop for the detail modal
+                let hasBackdrop = false;
+                const remainingBackdrops = document.querySelectorAll('.modal-backdrop');
+
+                if (remainingBackdrops.length > 0) {
+                    // Reset the remaining backdrop
+                    remainingBackdrops[0].style.zIndex = '1040';
+                    remainingBackdrops[0].classList.add('show');
+                    hasBackdrop = true;
+                } else {
+                    // Create a new backdrop if none exists
+                    const newBackdrop = document.createElement('div');
+                    newBackdrop.className = 'modal-backdrop fade show';
+                    newBackdrop.style.zIndex = '1040';
+                    document.body.appendChild(newBackdrop);
+                    hasBackdrop = true;
+                }
+
+                // Ensure body has modal-open class
+                document.body.classList.add('modal-open');
+
+                // Focus first button in detail modal
+                const firstButton = detailModal.querySelector('button');
+                if (firstButton) {
+                    firstButton.focus();
+                }
+            }
+        }, 150);
+    }, { once: true });
+}
+
+// Function to properly close modal and open another (legacy function)
+function closeDetailModalAndOpen(targetModalId) {
+    const detailModal = document.getElementById('detailModal');
+    const targetModal = document.getElementById(targetModalId);
+
+    if (detailModal && targetModal) {
+        const detailModalInstance = bootstrap.Modal.getInstance(detailModal);
+
+        // Set higher z-index for the target modal
+        targetModal.style.zIndex = '1070';
+
+        if (detailModalInstance) {
+            detailModalInstance.hide();
+
+            // Wait for modal to fully close before opening the new one
+            detailModal.addEventListener('hidden.bs.modal', function() {
+                setTimeout(() => {
+                    const targetModalInstance = new bootstrap.Modal(targetModal, {
+                        backdrop: true,
+                        keyboard: true
+                    });
+                    targetModalInstance.show();
+                }, 150);
+            }, { once: true });
+        } else {
+            // If no instance exists, create and show target modal directly
+            const targetModalInstance = new bootstrap.Modal(targetModal);
+            targetModalInstance.show();
+        }
+    }
+}
+
+// Enhanced modal event handlers to fix accessibility and backdrop issues
+document.addEventListener('DOMContentLoaded', function() {
+    const detailModal = document.getElementById('detailModal');
+
+    if (detailModal) {
+        // Fix accessibility issue by properly managing aria-hidden
+        detailModal.addEventListener('show.bs.modal', function() {
+            console.log('🔓 Detail modal showing');
+            // Remove aria-hidden when modal is showing
+            this.removeAttribute('aria-hidden');
+        });
+
+        detailModal.addEventListener('shown.bs.modal', function() {
+            console.log('✅ Detail modal shown');
+            // Ensure modal is not aria-hidden when it's visible
+            this.removeAttribute('aria-hidden');
+
+            // Focus management for accessibility
+            const firstFocusableElement = this.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (firstFocusableElement) {
+                firstFocusableElement.focus();
+            }
+        });
+
+        detailModal.addEventListener('hide.bs.modal', function() {
+            console.log('🔒 Detail modal hiding');
+        });
+
+        detailModal.addEventListener('hidden.bs.modal', function() {
+            // Set aria-hidden only after modal is completely hidden
+            this.setAttribute('aria-hidden', 'true');
+
+            // Clear modal content to prevent memory leaks
+            const modalBody = this.querySelector('#detailModalBody');
+            if (modalBody) {
+                modalBody.innerHTML = '';
+            }
+
+            // Clean up any remaining backdrop elements
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(backdrop => backdrop.remove());
+
+                // Re-enable page scrolling
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+                document.documentElement.style.removeProperty('overflow');
+            }, 100);
+        });
+
+        // Prevent escape key from closing modal
+        detailModal.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                console.log('⌨️ Escape key pressed but modal close prevented');
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        });
+    }
+
+    // Add event handlers for all edit and delete modals
+    const allModals = document.querySelectorAll('.modal');
+    allModals.forEach(function(modal) {
+        modal.addEventListener('hidden.bs.modal', function() {
+            // Clean up backdrop elements
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                backdrops.forEach(backdrop => backdrop.remove());
+
+                // Re-enable page interactions
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('overflow');
+                document.body.style.removeProperty('padding-right');
+                document.documentElement.style.removeProperty('overflow');
+            }, 100);
+        });
+
+        // Prevent backdrop clicks from closing modal
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                console.log('🖱️ Backdrop clicked, but modal close prevented');
+                e.stopPropagation();
+                e.preventDefault();
+            }
+        });
+    });
+
+    // Global error handler for better debugging
+    window.addEventListener('error', function(e) {
+        console.error('🚨 Global JavaScript Error:', {
+            message: e.message,
+            filename: e.filename,
+            lineno: e.lineno,
+            colno: e.colno,
+            error: e.error
+        });
+    });
+
+    // Global unhandled promise rejection handler
+    window.addEventListener('unhandledrejection', function(e) {
+        console.error('🚨 Unhandled Promise Rejection:', e.reason);
+    });
+});
+
+// Function to show group details using globally loaded data
+function showGroupDetails(kod) {
+    console.log('🔍 showGroupDetails called for kod:', kod);
+
+    const grup = yatirimGroupsData[kod];
+    if (!grup) {
+        console.error('❌ Group not found for kod:', kod);
+        return;
+    }
+
+    console.log('✅ Group found:', grup);
+    showMultipleItemDetails(kod, grup.kalemler);
+    
+    // Prevent modal from closing on backdrop click or escape key
+    const detailModal = document.getElementById('detailModal');
+    if (detailModal) {
+        const modalInstance = bootstrap.Modal.getInstance(detailModal) || new bootstrap.Modal(detailModal, {
+            backdrop: 'static',
+            keyboard: false
+        });
+        
+        // If already shown, update the options
+        if (detailModal.classList.contains('show')) {
+            detailModal._config = { backdrop: 'static', keyboard: false };
+        }
+    }
+}
+
+// AJAX price update function for modal
+function updatePriceAjax(yatirimId) {
+    console.log('🔄 AJAX price update for investment ID:', yatirimId);
+
+    const updateBtn = document.getElementById(`updateBtn${yatirimId}`);
+    if (!updateBtn) {
+        console.error('Update button not found for ID:', yatirimId);
+        return;
+    }
+
+    // Show loading state
+    const originalContent = updateBtn.innerHTML;
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/fiyat_guncelle/${yatirimId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.text();
+    })
+    .then(html => {
+        // Success - show notification in modal
+        showModalNotification('success', 'Fiyat başarıyla güncellendi!');
+
+        // Refresh the investment groups data and re-show the modal
+        setTimeout(() => {
+            location.reload(); // Simple reload to get fresh data
+        }, 1000);
+    })
+    .catch(error => {
+        console.error('❌ AJAX price update error:', error);
+        showModalNotification('error', 'Fiyat güncellenirken hata oluştu: ' + error.message);
+    })
+    .finally(() => {
+        // Restore button state
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = originalContent;
+    });
+}
+
+// Function to show notifications inside modal
+function showModalNotification(type, message) {
+    const modalBody = document.getElementById('detailModalBody');
+    if (!modalBody) return;
+
+    // Remove existing notifications
+    const existingNotifications = modalBody.querySelectorAll('.modal-notification');
+    existingNotifications.forEach(notif => notif.remove());
+
+    // Create notification
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle';
+
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible fade show modal-notification`;
+    notification.innerHTML = `
+        <i class="${icon} me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insert at the top of modal body
+    modalBody.insertBefore(notification, modalBody.firstChild);
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+
+// Function to show multiple item details in modal
+function showMultipleItemDetails(kod, kalemler) {
+    console.group('🔍 showMultipleItemDetails Debug');
+    console.log('📋 Function called for kod:', kod);
+    console.log('📦 Kalemler data type:', typeof kalemler);
+    console.log('📦 Kalemler data:', kalemler);
+
+    const modalTitle = document.getElementById('detailModalTitle');
+    const modalBody = document.getElementById('detailModalBody');
+
+    // Check if modal elements exist
+    if (!modalTitle || !modalBody) {
+        console.error('❌ Modal elements not found:', {
+            modalTitle: !!modalTitle,
+            modalBody: !!modalBody
+        });
+        console.groupEnd();
+        return;
+    }
+
+    // Show loading state
+    modalTitle.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Yükleniyor...`;
+    modalBody.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+            <p class="mt-2 text-muted">Kalem detayları hazırlanıyor...</p>
+        </div>
+    `;
+
+    try {
+        // Validate that kalemler is an array
+        if (!Array.isArray(kalemler)) {
+            throw new Error('Kalemler data is not an array: ' + typeof kalemler);
+        }
+
+        // Validate array is not empty
+        if (kalemler.length === 0) {
+            throw new Error('Kalemler array is empty');
+        }
+
+        console.log('✅ Valid kalemler array with', kalemler.length, 'items');
+
+    } catch (e) {
+        console.error('❌ Data Validation Error:', e);
+        modalTitle.innerHTML = `<i class="fas fa-exclamation-triangle me-2 text-danger"></i>Veri Hatası`;
+        modalBody.innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-bug me-2"></i>Veri Doğrulama Hatası</h5>
+                <p><strong>Hata Mesajı:</strong> ${e.message}</p>
+                <p><strong>Veri Tipi:</strong> ${typeof kalemler}</p>
+            </div>
+        `;
+        console.groupEnd();
+        return;
+    }
+
+    try {
+        // Update modal title
+        modalTitle.innerHTML = `<i class="fas fa-list-ul me-2"></i>${kod} - Kalem Detayları (${kalemler.length} kalem)`;
+
+        console.log('🎨 Building content for', kalemler.length, 'items');
+
+        // Create content
+        let content = `
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Alış Tarihi</th>
+                            <th>Alış Fiyatı</th>
+                            <th>Miktar</th>
+                            <th>Güncel Fiyat</th>
+                            <th>Güncel Değer</th>
+                            <th>Kâr/Zarar</th>
+                            <th>Getiri %</th>
+                            <th>Kategori</th>
+                            <th>Notlar</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        kalemler.forEach(function(kalem, index) {
+            console.log(`🔨 Processing item ${index + 1}:`, kalem);
+
+            try {
+                // Safely parse dates and numbers
+                const alisDate = kalem.alis_tarihi ? 
+                    new Date(kalem.alis_tarihi).toLocaleDateString('tr-TR') : 
+                    'Bilinmiyor';
+
+                const alisPrice = kalem.alis_fiyati ? 
+                    parseFloat(kalem.alis_fiyati).toLocaleString('tr-TR', {minimumFractionDigits: 6, maximumFractionDigits: 6}) : 
+                    '0.000000';
+
+                const miktar = kalem.miktar ? 
+                    parseFloat(kalem.miktar).toLocaleString('tr-TR', {minimumFractionDigits: 6, maximumFractionDigits: 6}) : 
+                    '0.000000';
+
+                const guncelFiyat = kalem.guncel_fiyat ? 
+                    `₺${parseFloat(kalem.guncel_fiyat).toLocaleString('tr-TR', {minimumFractionDigits: 6, maximumFractionDigits: 6})}` : 
+                    '-';
+
+                const guncelDeger = kalem.guncel_deger ? 
+                    parseFloat(kalem.guncel_deger).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 
+                    '0.00';
+
+                const karZarar = kalem.kar_zarar !== undefined ? 
+                    parseFloat(kalem.kar_zarar) : 0;
+                const karZararClass = karZarar >= 0 ? 'text-success' : 'text-danger';
+                const karZararFormatted = karZarar.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'always'});
+
+                const getiri = kalem.getiri !== undefined ? 
+                    parseFloat(kalem.getiri) : 0;
+                const getiriClass = getiri >= 0 ? 'text-success' : 'text-danger';
+                const getiriFormatted = getiri.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'always'});
+
+                content += `
+                    <tr id="row${kalem.id}">
+                        <td>${alisDate}</td>
+                        <td>₺${alisPrice}</td>
+                        <td>${miktar}</td>
+                        <td id="guncelFiyat${kalem.id}">${guncelFiyat}</td>
+                        <td id="guncelDeger${kalem.id}">₺${guncelDeger}</td>
+                        <td id="karZarar${kalem.id}" class="${karZararClass}">₺${karZararFormatted}</td>
+                        <td id="getiri${kalem.id}" class="${getiriClass}">${getiriFormatted}%</td>
+                        <td>${kalem.kategori || '-'}</td>
+                        <td>${kalem.notlar || '-'}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-success btn-sm" 
+                                        onclick="updatePriceAjax(${kalem.id})" 
+                                        id="updateBtn${kalem.id}" 
+                                        title="Fiyat Güncelle">
+                                    <i class="fas fa-sync"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-warning btn-sm" 
+                                        onclick="openModalOnTop('duzenleModal${kalem.id}')" title="Düzenle">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        onclick="openModalOnTop('silModal${kalem.id}')" title="Sil">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } catch (itemError) {
+                console.error(`❌ Error processing item ${index + 1}:`, itemError);
+                content += `
+                    <tr class="table-warning">
+                        <td colspan="10">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Kalem #${index + 1} işlenirken hata oluştu: ${itemError.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+
+        content += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        modalBody.innerHTML = content;
+        console.log('✅ Content successfully rendered');
+
+    } catch (renderError) {
+        console.error('❌ Rendering Error:', renderError);
+        modalTitle.innerHTML = `<i class="fas fa-exclamation-triangle me-2 text-danger"></i>Render Hatası`;
+        modalBody.innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-paint-brush me-2"></i>İçerik Oluşturma Hatası</h5>
+                <p><strong>Hata:</strong> ${renderError.message}</p>
+                <p>İçerik oluşturulurken bir sorun oluştu. Lütfen sayfayı yenilemeyi deneyin.</p>
+            </div>
+        `;
+    }
+
+    console.groupEnd();
+}
+
+// Real-time search and filtering functionality
+function initializeRealTimeFiltering() {
+    const searchInput = document.getElementById('search-input');
+    const tipFilter = document.getElementById('tip-filter');
+    const kategoriFilter = document.getElementById('kategori-filter');
+    const clearFiltersBtn = document.getElementById('clearFilters');
+
+    console.log('Initializing real-time filtering...');
+
+    // Real-time search
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            console.log('Search input changed:', this.value);
+            applyFilters();
+        });
+
+        searchInput.addEventListener('keyup', function() {
+            applyFilters();
+        });
+    }
+
+    // Filter changes
+    if (tipFilter) {
+        tipFilter.addEventListener('change', function() {
+            console.log('Tip filter changed:', this.value);
+            applyFilters();
+        });
+    }
+
+    if (kategoriFilter) {
+        kategoriFilter.addEventListener('change', function() {
+            console.log('Kategori filter changed:', this.value);
+            applyFilters();
+        });
+    }
+
+    // Clear filters
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', function() {
+            console.log('Clear filters clicked');
+            if (searchInput) searchInput.value = '';
+            if (tipFilter) tipFilter.value = '';
+            if (kategoriFilter) kategoriFilter.value = '';
+            applyFilters();
+        });
+    }
+
+    function applyFilters() {
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const selectedTip = tipFilter ? tipFilter.value.toLowerCase() : '';
+        const selectedKategori = kategoriFilter ? kategoriFilter.value : '';
+
+        console.log('Applying filters:', { searchTerm, selectedTip, selectedKategori });
+
+        // Desktop table rows (main rows, not collapse details)
+        const desktopRows = document.querySelectorAll('.d-none.d-xl-block tbody tr:not(.collapse)');
+        // Mobile cards
+        const mobileCards = document.querySelectorAll('.d-xl-none .card[data-kategori]');
+
+        let visibleDesktopCount = 0;
+        let visibleMobileCount = 0;
+
+        // Filter desktop rows
+        desktopRows.forEach(function(row, index) {
+            const rowText = row.textContent.toLowerCase();
+            const tipCell = row.querySelector('td:nth-child(3)');
+            const tipText = tipCell ? tipCell.textContent.toLowerCase().trim() : '';
+            const kategoriAttr = row.getAttribute('data-kategori') || '';
+
+            let shouldShow = true;
+            let hasMatchInDetails = false;
+
+
+
+            // Apply search filter (search in code, name, notes, and detail content)
+            if (searchTerm) {
+                const kodCell = row.querySelector('td:first-child');
+                const isimCell = row.querySelector('td:nth-child(2)');
+                const kodText = kodCell ? kodCell.textContent.toLowerCase() : '';
+                const isimText = isimCell ? isimText.textContent.toLowerCase() : '';
+
+                if (!kodText.includes(searchTerm) && 
+                    !isimText.includes(searchTerm) && 
+                    !rowText.includes(searchTerm) &&
+                    !hasMatchInDetails) {
+                    shouldShow = false;
+                }
+            }
+
+            // Apply tip filter
+            if (selectedTip) {
+                if (!tipText.includes(selectedTip)) {
+                    shouldShow = false;
+                }
+            }
+
+            // Apply kategori filter
+            if (selectedKategori) {
+                let categoryMatch = kategoriAttr.includes(selectedKategori);
+
+                if (!categoryMatch) {
+                    shouldShow = false;
+                }
+            }
+
+            // Show/hide main row
+            row.style.display = shouldShow ? '' : 'none';
+
+            if (shouldShow) visibleDesktopCount++;
+        });
+
+        // Filter mobile cards
+        mobileCards.forEach(function(card) {
+            const cardText = card.textContent.toLowerCase();
+            const kategoriAttr = card.getAttribute('data-kategori') || '';
+            const tipBadge = card.querySelector('.badge');
+            const tipText = tipBadge ? tipBadge.textContent.toLowerCase().trim() : '';
+
+            // Get code and namefrom card
+            const kodElement = card.querySelector('.card-title strong');
+            const isimElement = card.querySelector('.text-muted');
+            const kodText = kodElement ? kodElement.textContent.toLowerCase() : '';
+            const isimText = isimElement ? isimText.textContent.toLowerCase() : '';
+
+            let shouldShow = true;
+            let hasMatchInDetails = false;
+
+
+
+            // Apply search filter
+            if (searchTerm) {
+                if (!kodText.includes(searchTerm) && 
+                    !isimText.includes(searchTerm) && 
+                    !cardText.includes(searchTerm) &&
+                    !hasMatchInDetails) {
+                    shouldShow = false;
+                }
+            }
+
+            // Apply tip filter
+            if (selectedTip) {
+                if (!tipText.includes(selectedTip)) {
+                    shouldShow = false;
+                }
+            }
+
+            // Apply kategori filter
+            if (selectedKategori) {
+                let categoryMatch = kategoriAttr.includes(selectedKategori);
+
+                if (!categoryMatch) {
+                    shouldShow = false;
+                }
+            }
+
+            card.style.display = shouldShow ? '' : 'none';
+
+            if (shouldShow) visibleMobileCount++;
+        });
+
+        console.log('Visible items:', { desktop: visibleDesktopCount, mobile: visibleMobileCount });
+
+        // Show/hide no results message
+        updateNoResultsMessage(visibleDesktopCount, visibleMobileCount);
+    }
+
+    function updateNoResultsMessage(desktopCount, mobileCount) {
+        const tableContainer = document.querySelector('.d-none.d-xl-block .table-responsive');
+        const mobileContainer = document.querySelector('.d-xl-none');
+
+        // Remove existing no results messages
+        const existingDesktopMsg = document.querySelector('.no-results-desktop');
+        const existingMobileMsg = document.querySelector('.no-results-mobile');
+
+        if (existingDesktopMsg) existingDesktopMsg.remove();
+        if (existingMobileMsg) existingMobileMsg.remove();
+
+        // Show no results for desktop if no items visible
+        if (desktopCount === 0 && tableContainer) {
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'text-center py-5 no-results-desktop';
+            noResultsDiv.innerHTML = `
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">Sonuç bulunamadı</h5>
+                <p class="text-muted mb-0">Arama kriterlerinizi değiştirmeyi deneyin.</p>
+            `;
+            tableContainer.appendChild(noResultsDiv);
+        }
+
+        // Show no results for mobile if no items visible
+        if (mobileCount === 0 && mobileContainer) {
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'text-center py-5 no-results-mobile';
+            noResultsDiv.innerHTML = `
+                <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">Sonuç bulunamadı</h5>
+                <p class="text-muted mb-0">Arama kriterlerinizi değiştirmeyi deneyin.</p>
+            `;
+            mobileContainer.appendChild(noResultsDiv);
+        }
+    }
+
+    // Initial filter application (in case there are any pre-selected values)
+    applyFilters();
+}
+
+// Additional error handling for better debugging
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔧 DOM fully loaded, all systems ready');
+
+    // Check for any undefined functions that might be called
+    window.addEventListener('error', function(e) {
+        if (e.message.includes('showInvestmentDetail is not defined')) {
+            console.warn('⚠️ showInvestmentDetail called but not implemented');
+            e.preventDefault();
+        }
+    });
+});
+
+// Add function to show investment detail from group
+function showInvestmentDetailFromGroup(yatirimId) {
+    const detailModal = document.getElementById('detailModal');
+    const duzenleModal = document.getElementById(`duzenleModal${yatirimId}`);
+
+    if (detailModal && duzenleModal) {
+        // Show the edit modal with a higher z-index
+        $(duzenleModal).modal('show');
+        $(detailModal).css('z-index', '1040');
+        $(duzenleModal).css('z-index', '1050');
+
+        // Handle modal close events to reset z-index
+        $(duzenleModal).on('hidden.bs.modal', function () {
+            $(detailModal).css('z-index', '1050');
+            $(duzenleModal).off('hidden.bs.modal'); // Remove the event handler
+        });
+    }
+}
 </script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Modal layering improvements */
+.modal {
+    z-index: 1050;
+}
+
+.modal.show {
+    z-index: 1050;
+}
+
+.modal-backdrop {
+    z-index: 1040;
+}
+
+/* Ensure proper backdrop when modals are layered */
+.modal-backdrop.show {
+    opacity: 0.5;
+}
+
+/* Higher z-index for edit/delete modals over detail modal */
+.modal[id^="duzenleModal"],
+.modal[id^="silModal"] {
+    z-index: 1070 !important;
+}
+
+/* Ensure detail modal stays visible behind edit modals */
+#detailModal.show {
+    z-index: 1055 !important;
+}
+
+/* Fix backdrop layering issues */
+body.modal-open {
+    overflow: hidden;
+}
+
+/* Prevent backdrop conflicts when layering */
+.modal-backdrop + .modal-backdrop {
+    opacity: 0.3;
+}
+
+/* Enhanced modal layering for better UX */
+.modal[style*="z-index: 1070"] {
+    z-index: 1070 !important;
+}
+
+.modal[style*="z-index: 1055"] {
+    z-index: 1055 !important;
+}
+
+/* Ensure backdrop doesn't interfere with layered modals */
+.modal-backdrop:nth-of-type(2) {
+    background-color: rgba(0, 0, 0, 0.3);
+    z-index: 1069;
+}
+
+/* Specific z-index management for layered backdrops */
+.modal-backdrop[style*="z-index: 1054"] {
+    z-index: 1054 !important;
+}
+
+.modal-backdrop[style*="z-index: 1069"] {
+    z-index: 1069 !important;
+}
+</style>
 {% endblock %}

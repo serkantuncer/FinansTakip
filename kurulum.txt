@@ -1,0 +1,137 @@
+python -m venv .venv
+Windows:
+my_env\Scripts\activate
+
+Linux/macOS:
+chmod +x .venv/bin/activate  (izin problemi olursa)
+source .venv/bin/activate
+
+
+pip install flask
+pip install flask-sqlalchemy
+pip install flask-migrate
+pip install flask-login
+pip install requests
+pip install bs4
+pip install pandas
+pip install plotly
+
+#requirements.txt varsa
+pip install -r requirements.txt
+
+
+/////////////////////////////////////////////////////////////////
+
+####PyInstaller ile kurulum - MACOS
+
+# 1. Eski build klasörlerini sil
+rm -rf build dist __pycache__
+
+# 2. Temiz build al
+pyinstaller YatirimTakip.spec --clean
+
+
+
+# 3. .dylib path'lerini düzelt
+./postbuild_fix.sh
+
+# 4. Terminalden test
+./dist/FinansTakipSistemi.app/Contents/MacOS/FinansTakipSistemi
+
+yada
+pip install pyinstaller
+python -m PyInstaller YatirimTakip.spec --clean
+
+./dist/YatirimTakip.app/Contents/MacOS/YatirimTakip
+./dist/FinansTakipSistemi.app/Contents/MacOS/FinansTakipSistemi
+
+port kullanımda ise öğrenmek için:
+lsof -i :5001
+sonrasında
+kill -9 $(lsof -t -i :5001) #portu boşaltmak için
+
+######################################################################
+#Windows PyInstaller ile kurulum
+
+python --version
+
+Sanal ortam oluştur
+python -m venv .venv
+
+Sanal ortamı AKTİF ET
+.venv\Scripts\activate
+source .venv/Scripts/activate
+
+yada (PowerShell:)
+.venv\Scripts\Activate.ps1
+(CMD:)
+.venv\Scripts\activate.bat
+
+
+Ctrl+Shift+P → “Python: Select Interpreter” yaz
+Listeden .venv\Scripts\python.exe yolunu seç
+
+
+PyInstaller kurulu değilse, kur:
+pip install pyinstaller
+
+ttkbootstrap Kütüphanesini Kur:
+pip install ttkbootstrap
+
+
+python -m PyInstaller YatirimTakip.spec --clean
+
+dist\YatirimTakip\YatirimTakip.exe
+
+spec. dosyası kodu:
+
+# -*- mode: python ; coding: utf-8 -*-
+import os
+
+a = Analysis(
+    ['main.py'],
+    pathex=[os.path.abspath('.')],  # Proje dizinini tanımladık
+    binaries=[],
+    datas=[
+        ('templates', 'templates'), 
+        ('static', 'static'), 
+        ('instance/finans_takip.db', 'instance'),
+        ('instance', 'instance')
+    ],
+    hiddenimports=[
+        'sqlite3',
+        'flask',
+        'flask_login',
+        'werkzeug',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='Financial Portal',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True, # UPX bazen virüs tarayıcıları tarafından yanlış pozitif verebilir. Gerekirse False yap
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,  # İstersen hata ayıklama için True yap
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='icon.ico',  # Windows .ico dosyası
+)
