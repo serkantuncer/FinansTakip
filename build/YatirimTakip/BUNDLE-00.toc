@@ -1,3 +1,0 @@
-([('FinansTakipSistemi',
-   '/Users/serkan/Documents/serkan_python/pythonRepo_MACOS/yatirim_yonetimi/FinancialSecurePortal_Yeni/dist/FinansTakipSistemi',
-   'EXECUTABLE')],)

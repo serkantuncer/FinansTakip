@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Kayıt Ol - Yatırım Takip{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-user-plus fa-3x text-success mb-3"></i>
+                        <h2 class="card-title">Kayıt Ol</h2>
+                        <p class="text-muted">Yeni hesap oluşturun</p>
+                    </div>
+                    
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">
+                                <i class="fas fa-user me-2"></i>Kullanıcı Adı
+                            </label>
+                            <input type="text" class="form-control" id="username" name="username" required
+                                   pattern="[a-zA-Z0-9_]{3,20}" title="3-20 karakter, sadece harf, rakam ve alt çizgi">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label">
+                                <i class="fas fa-envelope me-2"></i>E-posta
+                            </label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">
+                                <i class="fas fa-lock me-2"></i>Şifre
+                            </label>
+                            <input type="password" class="form-control" id="password" name="password" required
+                                   minlength="6" title="En az 6 karakter olmalıdır">
+                            <div class="form-text">En az 6 karakter olmalıdır</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password_confirm" class="form-label">
+                                <i class="fas fa-lock me-2"></i>Şifre Tekrar
+                            </label>
+                            <input type="password" class="form-control" id="password_confirm" name="password_confirm" required>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-user-plus me-2"></i>Kayıt Ol
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="text-center">
+                        <p class="mb-0">Zaten hesabınız var mı?</p>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-primary mt-2">
+                            <i class="fas fa-sign-in-alt me-2"></i>Giriş Yap
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const password = document.getElementById('password');
+    const passwordConfirm = document.getElementById('password_confirm');
+    
+    function validatePassword() {
+        if (password.value !== passwordConfirm.value) {
+            passwordConfirm.setCustomValidity('Şifreler eşleşmiyor');
+        } else {
+            passwordConfirm.setCustomValidity('');
+        }
+    }
+    
+    password.addEventListener('change', validatePassword);
+    passwordConfirm.addEventListener('keyup', validatePassword);
+});
+</script>
+{% endblock %}

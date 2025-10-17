@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+
+{% block title %}Ana Sayfa - Yatırım Takip{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Welcome Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>
+                    <i class="fas fa-home me-2"></i>
+                    Hoş geldiniz, {{ current_user.username }}!
+                </h1>
+                <div>
+                    <a href="{{ url_for('yatirimlar') }}" class="btn btn-primary">
+                        <i class="fas fa-chart-line me-2"></i>Yatırımları Yönet
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title mb-1">Toplam Yatırım</h6>
+                            <h4>₺{{ "{:,.2f}".format(toplam_yatirim) }}</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-coins fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title mb-1">Güncel Değer</h6>
+                            <h4>₺{{ "{:,.2f}".format(guncel_deger) }}</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-chart-area fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card {% if kar_zarar >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title mb-1">Kâr/Zarar</h6>
+                            <h4>₺{{ "{:+,.2f}".format(kar_zarar) }}</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-{% if kar_zarar >= 0 %}arrow-up{% else %}arrow-down{% endif %} fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card {% if kar_zarar_yuzde >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title mb-1">Getiri</h6>
+                            <h4>{{ "{:+.2f}".format(kar_zarar_yuzde) }}%</h4>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-percentage fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Varlık Tiplerine Göre Özet -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-layer-group me-2"></i>
+                        Varlık Tiplerine Göre Özet
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Desktop Table View -->
+                    <div class="d-none d-lg-block">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Varlık Tipi</th>
+                                        <th>Güncel Değer</th>
+                                        <th>Maliyet</th>
+                                        <th>Kâr/Zarar</th>
+                                        <th>Ağırlık</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for tip_data in tip_ozet %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ tip_data.tip|title }}</span>
+                                        </td>
+                                        <td>₺{{ "{:,.2f}".format(tip_data.guncel_deger) }}</td>
+                                        <td>₺{{ "{:,.2f}".format(tip_data.maliyet) }}</td>
+                                        <td class="{% if tip_data.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            ₺{{ "{:+,.2f}".format(tip_data.kar_zarar) }}
+                                            <br><small>({{ "{:+.2f}".format(tip_data.kar_zarar_yuzde) }}%)</small>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar" role="progressbar" 
+                                                     style="width: {{ tip_data.agirlik }}%"
+                                                     aria-valuenow="{{ tip_data.agirlik }}" aria-valuemin="0" aria-valuemax="100">
+                                                    {{ "{:.1f}".format(tip_data.agirlik) }}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Mobile/Tablet Card View -->
+                    <div class="d-lg-none">
+                        {% for tip_data in tip_ozet %}
+                        <div class="card mb-3 border-0 border-bottom">
+                            <div class="card-body py-3">
+                                <div class="row align-items-center">
+                                    <div class="col-6">
+                                        <span class="badge bg-secondary mb-2">{{ tip_data.tip|title }}</span>
+                                        <h6 class="mb-1">₺{{ "{:,.2f}".format(tip_data.guncel_deger) }}</h6>
+                                        <small class="text-muted">Güncel Değer</small>
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        <div class="{% if tip_data.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                            ₺{{ "{:+,.2f}".format(tip_data.kar_zarar) }}
+                                        </div>
+                                        <small class="{% if tip_data.kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                            {{ "{:+.2f}".format(tip_data.kar_zarar_yuzde) }}%
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <small class="text-muted">Maliyet: ₺{{ "{:,.2f}".format(tip_data.maliyet) }}</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="progress" style="height: 15px;">
+                                            <div class="progress-bar" role="progressbar" 
+                                                 style="width: {{ tip_data.agirlik }}%"
+                                                 aria-valuenow="{{ tip_data.agirlik }}" aria-valuemin="0" aria-valuemax="100">
+                                                <small>{{ "{:.1f}".format(tip_data.agirlik) }}%</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts and Performance -->
+    <div class="row mb-4">
+        <!-- Portfolio Distribution -->
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>
+                        Portföy Dağılımı
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if grafik_html %}
+                        {{ grafik_html|safe }}
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Henüz yatırım bulunmuyor</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 30 Günlük Performans -->
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>
+                        30 Günlük Performans
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if performans_grafik_html %}
+                        {{ performans_grafik_html|safe }}
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Performans verisi yok</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Ranking -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-trophy me-2"></i>
+                        Performans Sıralaması (En İyi 10)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if performans_siralamasi %}
+                        <!-- Desktop Table View -->
+                        <div class="d-none d-lg-block">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Sıra</th>
+                                            <th>Kod</th>
+                                            <th>İsim</th>
+                                            <th>Tip</th>
+                                            <th>Getiri</th>
+                                            <th>Kâr/Zarar</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for i, yatirim in performans_siralamasi %}
+                                        <tr>
+                                            <td>
+                                                {% if loop.index <= 3 %}
+                                                    <i class="fas fa-medal text-warning me-1"></i>
+                                                {% endif %}
+                                                {{ loop.index }}
+                                            </td>
+                                            <td><strong>{{ yatirim.kod }}</strong></td>
+                                            <td>{{ yatirim.isim[:25] + '...' if yatirim.isim and yatirim.isim|length > 25 else yatirim.isim or '-' }}</td>
+                                            <td><span class="badge bg-secondary">{{ yatirim.tip|title }}</span></td>
+                                            <td class="{% if yatirim.getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                {{ "{:+.2f}".format(yatirim.getiri) }}%
+                                            </td>
+                                            <td class="{% if yatirim.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ₺{{ "{:+,.2f}".format(yatirim.kar_zarar) }}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Mobile/Tablet Card View -->
+                        <div class="d-lg-none">
+                            {% for i, yatirim in performans_siralamasi %}
+                            <div class="card mb-2 border-0 border-bottom">
+                                <div class="card-body py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-2 text-center">
+                                            <div class="fw-bold">
+                                                {% if loop.index <= 3 %}
+                                                    <i class="fas fa-medal text-warning"></i>
+                                                {% endif %}
+                                                {{ loop.index }}
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <strong class="text-primary me-2">{{ yatirim.kod }}</strong>
+                                                <span class="badge bg-secondary">{{ yatirim.tip|title }}</span>
+                                            </div>
+                                            <small class="text-muted d-block text-truncate" title="{{ yatirim.isim or 'İsim yok' }}">
+                                                {{ yatirim.isim[:30] + '...' if yatirim.isim and yatirim.isim|length > 30 else yatirim.isim or '-' }}
+                                            </small>
+                                        </div>
+                                        <div class="col-4 text-end">
+                                            <div class="{% if yatirim.getiri >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                                {{ "{:+.2f}".format(yatirim.getiri) }}%
+                                            </div>
+                                            <small class="{% if yatirim.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ₺{{ "{:+,.0f}".format(yatirim.kar_zarar) }}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Henüz performans verisi yok</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Investments -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>
+                        Tüm Yatırımlar
+                    </h5>
+                    <div>
+                        <select id="kategoriFilter" class="form-select form-select-sm" onchange="filterByCategory()">
+                            <option value="">Tüm Kategoriler</option>
+                            {% for kategori in kategoriler %}
+                            <option value="{{ kategori }}">{{ kategori }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if yatirimlar %}
+                        <!-- Desktop Table View -->
+                        <div class="d-none d-xl-block">
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="yatirimlarTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Kod</th>
+                                            <th>İsim</th>
+                                            <th>Tip</th>
+                                            <th>Alış Fiyatı</th>
+                                            <th>Güncel Fiyat</th>
+                                            <th>Güncel Değer</th>
+                                            <th>Kâr/Zarar</th>
+                                            <th>Bilgi</th>
+                                        </tr>
+                                    </thead>
+                                <tbody>
+                                    {% for yatirim in yatirimlar %}
+                                    <tr data-kategori="{{ yatirim.kategori or '' }}">
+                                        <td>
+                                            <strong>{{ yatirim.kod }}</strong>
+                                            <br><small class="text-muted">{{ yatirim.alis_tarihi.strftime('%d/%m/%Y') }}</small>
+                                        </td>
+                                        <td>{{ yatirim.isim[:20] + '...' if yatirim.isim and yatirim.isim|length > 20 else yatirim.isim or '-' }}</td>
+                                        <td><span class="badge bg-secondary">{{ yatirim.tip|title }}</span></td>
+                                        <td>₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</td>
+                                        <td>
+                                            {% if yatirim.guncel_fiyat %}
+                                                ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if yatirim.guncel_fiyat %}
+                                                ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if yatirim.guncel_fiyat %}
+                                                {% set kar_zarar = (yatirim.guncel_fiyat - yatirim.alis_fiyati) * yatirim.miktar %}
+                                                <span class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    ₺{{ "{:+,.2f}".format(kar_zarar) }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-outline-info btn-sm" 
+                                                    onclick="showInvestmentDetail({{ yatirim.id }})" 
+                                                    data-bs-toggle="modal" data-bs-target="#detailModal">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                        
+                        <!-- Mobile/Tablet Card View -->
+                        <div class="d-xl-none" id="yatirimlarMobile">
+                            {% for yatirim in yatirimlar %}
+                            <div class="card mb-3 border-0 border-bottom" data-kategori="{{ yatirim.kategori or '' }}">
+                                <div class="card-body py-3">
+                                    <div class="row align-items-center mb-2">
+                                        <div class="col-6">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <strong class="text-primary me-2">{{ yatirim.kod }}</strong>
+                                                <span class="badge bg-secondary">{{ yatirim.tip|title }}</span>
+                                            </div>
+                                            <small class="text-muted d-block text-truncate" title="{{ yatirim.isim or 'İsim yok' }}">
+                                                {{ yatirim.isim[:35] + '...' if yatirim.isim and yatirim.isim|length > 35 else yatirim.isim or '-' }}
+                                            </small>
+                                            <small class="text-info">{{ yatirim.alis_tarihi.strftime('%d/%m/%Y') }}</small>
+                                            {% if yatirim.kategori %}
+                                                <span class="badge bg-info mt-1">{{ yatirim.kategori }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            {% if yatirim.guncel_fiyat %}
+                                                {% set kar_zarar = (yatirim.guncel_fiyat - yatirim.alis_fiyati) * yatirim.miktar %}
+                                                <div class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                                    ₺{{ "{:+,.2f}".format(kar_zarar) }}
+                                                </div>
+                                                <div class="{% if kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    {% if kar_zarar != 0 %}
+                                                        {{ "{:+.2f}".format((kar_zarar / (yatirim.alis_fiyati * yatirim.miktar)) * 100) }}%
+                                                    {% else %}
+                                                        0.00%
+                                                    {% endif %}
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-4">
+                                            <small class="text-muted">Alış</small>
+                                            <div class="fw-bold">₺{{ "{:,.2f}".format(yatirim.alis_fiyati) }}</div>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">Güncel</small>
+                                            <div class="fw-bold">
+                                                {% if yatirim.guncel_fiyat %}
+                                                    ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat) }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <small class="text-muted">Toplam Değer</small>
+                                            <div class="fw-bold">
+                                                {% if yatirim.guncel_fiyat %}
+                                                    ₺{{ "{:,.2f}".format(yatirim.guncel_fiyat * yatirim.miktar) }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-6">
+                                            <small class="text-muted">Miktar: {{ "{:,.2f}".format(yatirim.miktar) }}</small>
+                                        </div>
+                                        <div class="col-6 text-end">
+                                            <button type="button" class="btn btn-outline-info btn-sm" 
+                                                    onclick="showInvestmentDetail({{ yatirim.id }})" 
+                                                    data-bs-toggle="modal" data-bs-target="#detailModal">
+                                                <i class="fas fa-info-circle me-1"></i>Detay
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-line fa-4x text-muted mb-4"></i>
+                            <h4 class="text-muted">Henüz yatırım eklenmemiş</h4>
+                            <p class="text-muted mb-4">İlk yatırımınızı ekleyerek başlayın!</p>
+                            <a href="{{ url_for('yatirimlar') }}" class="btn btn-primary btn-lg">
+                                <i class="fas fa-plus me-2"></i>İlk Yatırımı Ekle
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Investment Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalTitle">
+                    <i class="fas fa-info-circle me-2"></i>Yatırım Detayları
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detailModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterByCategory() {
+    const filter = document.getElementById('kategoriFilter').value;
+    
+    // Filter desktop table rows
+    const rows = document.querySelectorAll('#yatirimlarTable tbody tr');
+    rows.forEach(row => {
+        const kategori = row.getAttribute('data-kategori');
+        if (filter === '' || kategori === filter) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Filter mobile cards
+    const cards = document.querySelectorAll('#yatirimlarMobile .card');
+    cards.forEach(card => {
+        const kategori = card.getAttribute('data-kategori');
+        if (filter === '' || kategori === filter) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function showInvestmentDetail(yatirimId) {
+    const modalBody = document.getElementById('detailModalBody');
+    
+    // Show loading spinner
+    modalBody.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+        </div>
+    `;
+    
+    // Fetch investment details
+    fetch(`/api/yatirim/${yatirimId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        Hata: ${data.error}
+                    </div>
+                `;
+                return;
+            }
+            
+            const kar_zarar = data.guncel_fiyat ? (data.guncel_fiyat - data.alis_fiyati) * data.miktar : 0;
+            const getiri = data.guncel_fiyat ? (data.guncel_fiyat / data.alis_fiyati - 1) * 100 : 0;
+            const degisim = data.guncel_fiyat ? data.guncel_fiyat - data.alis_fiyati : 0;
+            
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Temel Bilgiler</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Kod:</strong></td><td>${data.kod}</td></tr>
+                            <tr><td><strong>İsim:</strong></td><td>${data.isim || '-'}</td></tr>
+                            <tr><td><strong>Tip:</strong></td><td><span class="badge bg-secondary">${data.tip.charAt(0).toUpperCase() + data.tip.slice(1)}</span></td></tr>
+                            <tr><td><strong>Kategori:</strong></td><td>${data.kategori ? '<span class="badge bg-info">' + data.kategori + '</span>' : '-'}</td></tr>
+                            <tr><td><strong>Alış Tarihi:</strong></td><td>${new Date(data.alis_tarihi).toLocaleDateString('tr-TR')}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Fiyat Bilgileri</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Alış Fiyatı:</strong></td><td>₺${data.alis_fiyati.toFixed(6)}</td></tr>
+                            <tr><td><strong>Güncel Fiyat:</strong></td><td>${data.guncel_fiyat ? '₺' + data.guncel_fiyat.toFixed(6) : '-'}</td></tr>
+                            <tr><td><strong>Miktar:</strong></td><td>${data.miktar.toFixed(2)}</td></tr>
+                            <tr><td><strong>Değişim:</strong></td><td class="${degisim >= 0 ? 'text-success' : 'text-danger'}">${degisim >= 0 ? '+' : ''}₺${degisim.toFixed(6)} (${getiri >= 0 ? '+' : ''}${getiri.toFixed(2)}%)</td></tr>
+                            <tr><td><strong>Son Güncelleme:</strong></td><td>${data.son_guncelleme ? new Date(data.son_guncelleme).toLocaleDateString('tr-TR') + ' ' + new Date(data.son_guncelleme).toLocaleTimeString('tr-TR') : '-'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                ${data.notlar ? `
+                <div class="mt-3">
+                    <h6>Notlar</h6>
+                    <div class="alert alert-light">
+                        ${data.notlar}
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div class="mt-3">
+                    <h6>Fiyat Geçmişi (Son 30 Gün)</h6>
+                    <div id="priceChart" style="height: 300px;">
+                        <div class="text-center py-4">
+                            <i class="fas fa-chart-line fa-2x text-muted"></i>
+                            <p class="text-muted mt-2">Fiyat geçmişi grafiği yakında eklenecek</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Update modal title
+            document.getElementById('detailModalTitle').innerHTML = `
+                <i class="fas fa-info-circle me-2"></i>${data.isim || data.kod} - Detay
+            `;
+        })
+        .catch(error => {
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    Veri yüklenirken hata oluştu: ${error.message}
+                </div>
+            `;
+        });
+}
+</script>
+{% endblock %}
