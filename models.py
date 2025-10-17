@@ -29,6 +29,8 @@ class Yatirim(db.Model):
     alis_fiyati = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
     miktar = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
     guncel_fiyat = db.Column(db.Numeric(precision=20, scale=6))
+    guncel_alis_fiyat = db.Column(db.Numeric(precision=20, scale=6))  # Alış fiyatı (Altın/Döviz için)
+    guncel_satis_fiyat = db.Column(db.Numeric(precision=20, scale=6))  # Satış fiyatı (Altın/Döviz için)
     son_guncelleme = db.Column(db.DateTime)
     notlar = db.Column(db.Text)
     kategori = db.Column(db.String(30))  # Opsiyonel kategori alanı

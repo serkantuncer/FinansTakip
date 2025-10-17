@@ -630,6 +630,14 @@ def fiyat_guncelle(yatirim_id):
     if veri:
         yatirim.guncel_fiyat = veri['guncel_fiyat']
         yatirim.son_guncelleme = veri['tarih']
+        
+        # Altın ve Döviz için alış ve satış fiyatlarını da kaydet
+        if yatirim.tip in ['altin', 'doviz']:
+            if veri.get('alis_fiyat'):
+                yatirim.guncel_alis_fiyat = veri['alis_fiyat']
+            if veri.get('satis_fiyat'):
+                yatirim.guncel_satis_fiyat = veri['satis_fiyat']
+        
         if not yatirim.isim and veri.get('isim'):
             yatirim.isim = veri['isim']
         
@@ -682,6 +690,52 @@ def index():
     
     kar_zarar = guncel_deger_float - toplam_yatirim_float
     kar_zarar_yuzde = (kar_zarar / toplam_yatirim_float * 100) if toplam_yatirim_float > 0 else 0
+    
+    # Altın ve Döviz için alış/satış fiyatlarından ayrı hesaplamalar
+    altin_doviz_alis = {
+        'guncel_deger': Decimal('0'),
+        'kar_zarar': Decimal('0'),
+        'kar_zarar_yuzde': 0
+    }
+    altin_doviz_satis = {
+        'guncel_deger': Decimal('0'),
+        'kar_zarar': Decimal('0'),
+        'kar_zarar_yuzde': 0
+    }
+    altin_doviz_yatirim = Decimal('0')
+    
+    for y in yatirimlar:
+        if y.tip in ['altin', 'doviz']:
+            maliyet = y.alis_fiyati * y.miktar
+            altin_doviz_yatirim += maliyet
+            
+            # Alış fiyatından hesaplama
+            if y.guncel_alis_fiyat and y.guncel_alis_fiyat > 0:
+                altin_doviz_alis['guncel_deger'] += y.guncel_alis_fiyat * y.miktar
+            elif y.guncel_fiyat and y.guncel_fiyat > 0:
+                altin_doviz_alis['guncel_deger'] += y.guncel_fiyat * y.miktar
+            else:
+                altin_doviz_alis['guncel_deger'] += maliyet
+            
+            # Satış fiyatından hesaplama
+            if y.guncel_satis_fiyat and y.guncel_satis_fiyat > 0:
+                altin_doviz_satis['guncel_deger'] += y.guncel_satis_fiyat * y.miktar
+            elif y.guncel_fiyat and y.guncel_fiyat > 0:
+                altin_doviz_satis['guncel_deger'] += y.guncel_fiyat * y.miktar
+            else:
+                altin_doviz_satis['guncel_deger'] += maliyet
+    
+    # Float'a çevir ve kar/zarar hesapla
+    if altin_doviz_yatirim > 0:
+        altin_doviz_alis['guncel_deger'] = float(altin_doviz_alis['guncel_deger'])
+        altin_doviz_alis['kar_zarar'] = altin_doviz_alis['guncel_deger'] - float(altin_doviz_yatirim)
+        altin_doviz_alis['kar_zarar_yuzde'] = (altin_doviz_alis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
+        
+        altin_doviz_satis['guncel_deger'] = float(altin_doviz_satis['guncel_deger'])
+        altin_doviz_satis['kar_zarar'] = altin_doviz_satis['guncel_deger'] - float(altin_doviz_yatirim)
+        altin_doviz_satis['kar_zarar_yuzde'] = (altin_doviz_satis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
+    
+    altin_doviz_yatirim_float = float(altin_doviz_yatirim)
     
     # Kategoriye göre dağılım - Düzeltilmiş
     kategori_dagilim = {}
@@ -911,7 +965,10 @@ def index():
                          performans_siralamasi=performans_siralamasi,
                          kategoriler=kategoriler,
                          grafik_html=grafik_html,
-                         performans_grafik_html=performans_grafik_html)
+                         performans_grafik_html=performans_grafik_html,
+                         altin_doviz_yatirim=altin_doviz_yatirim_float,
+                         altin_doviz_alis=altin_doviz_alis,
+                         altin_doviz_satis=altin_doviz_satis)
 
 
 @app.route('/yatirimlar')
@@ -996,6 +1053,42 @@ def yatirimlar():
         grup['kalem_sayisi'] = len(grup['kalemler'])
         # Kalemler listesini tarihe göre sırala (en yeni önce)
         grup['kalemler'].sort(key=lambda x: x['alis_tarihi'], reverse=True)
+        
+        # Altın ve Döviz için alış/satış fiyatlarından hesaplamalar ekle
+        if grup['tip'] in ['altin', 'doviz']:
+            grup['guncel_deger_alis'] = 0
+            grup['guncel_deger_satis'] = 0
+            grup['kar_zarar_alis'] = 0
+            grup['kar_zarar_satis'] = 0
+            grup['getiri_alis'] = 0
+            grup['getiri_satis'] = 0
+            
+            for kalem in grup['kalemler']:
+                y_obj = next((y for y in yatirimlar if y.id == kalem['id']), None)
+                if y_obj:
+                    maliyet = kalem['maliyet']
+                    
+                    # Alış fiyatından
+                    if y_obj.guncel_alis_fiyat and y_obj.guncel_alis_fiyat > 0:
+                        grup['guncel_deger_alis'] += float(y_obj.guncel_alis_fiyat) * kalem['miktar']
+                    elif kalem['guncel_fiyat']:
+                        grup['guncel_deger_alis'] += kalem['guncel_deger']
+                    else:
+                        grup['guncel_deger_alis'] += maliyet
+                    
+                    # Satış fiyatından
+                    if y_obj.guncel_satis_fiyat and y_obj.guncel_satis_fiyat > 0:
+                        grup['guncel_deger_satis'] += float(y_obj.guncel_satis_fiyat) * kalem['miktar']
+                    elif kalem['guncel_fiyat']:
+                        grup['guncel_deger_satis'] += kalem['guncel_deger']
+                    else:
+                        grup['guncel_deger_satis'] += maliyet
+            
+            # Kar/Zarar ve Getiri hesapla
+            grup['kar_zarar_alis'] = grup['guncel_deger_alis'] - grup['toplam_maliyet']
+            grup['kar_zarar_satis'] = grup['guncel_deger_satis'] - grup['toplam_maliyet']
+            grup['getiri_alis'] = (grup['guncel_deger_alis'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
+            grup['getiri_satis'] = (grup['guncel_deger_satis'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
 
     return render_template('yatirimlar.html', 
                          yatirimlar=yatirimlar,
@@ -1441,6 +1534,44 @@ def export_portfolio_pdf():
         kar_zarar = guncel_deger_float - toplam_yatirim_float
         kar_zarar_yuzde = (kar_zarar / toplam_yatirim_float * 100) if toplam_yatirim_float > 0 else 0
         
+        # Altın ve Döviz için alış/satış fiyatlarından ayrı hesaplamalar
+        altin_doviz_alis = {'guncel_deger': Decimal('0'), 'kar_zarar': Decimal('0'), 'kar_zarar_yuzde': 0}
+        altin_doviz_satis = {'guncel_deger': Decimal('0'), 'kar_zarar': Decimal('0'), 'kar_zarar_yuzde': 0}
+        altin_doviz_yatirim = Decimal('0')
+        
+        for y in yatirimlar:
+            if y.tip in ['altin', 'doviz']:
+                maliyet = y.alis_fiyati * y.miktar
+                altin_doviz_yatirim += maliyet
+                
+                # Alış fiyatından hesaplama
+                if y.guncel_alis_fiyat and y.guncel_alis_fiyat > 0:
+                    altin_doviz_alis['guncel_deger'] += y.guncel_alis_fiyat * y.miktar
+                elif y.guncel_fiyat and y.guncel_fiyat > 0:
+                    altin_doviz_alis['guncel_deger'] += y.guncel_fiyat * y.miktar
+                else:
+                    altin_doviz_alis['guncel_deger'] += maliyet
+                
+                # Satış fiyatından hesaplama
+                if y.guncel_satis_fiyat and y.guncel_satis_fiyat > 0:
+                    altin_doviz_satis['guncel_deger'] += y.guncel_satis_fiyat * y.miktar
+                elif y.guncel_fiyat and y.guncel_fiyat > 0:
+                    altin_doviz_satis['guncel_deger'] += y.guncel_fiyat * y.miktar
+                else:
+                    altin_doviz_satis['guncel_deger'] += maliyet
+        
+        # Float'a çevir ve kar/zarar hesapla
+        if altin_doviz_yatirim > 0:
+            altin_doviz_alis['guncel_deger'] = float(altin_doviz_alis['guncel_deger'])
+            altin_doviz_alis['kar_zarar'] = altin_doviz_alis['guncel_deger'] - float(altin_doviz_yatirim)
+            altin_doviz_alis['kar_zarar_yuzde'] = (altin_doviz_alis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
+            
+            altin_doviz_satis['guncel_deger'] = float(altin_doviz_satis['guncel_deger'])
+            altin_doviz_satis['kar_zarar'] = altin_doviz_satis['guncel_deger'] - float(altin_doviz_yatirim)
+            altin_doviz_satis['kar_zarar_yuzde'] = (altin_doviz_satis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
+        
+        altin_doviz_yatirim_float = float(altin_doviz_yatirim)
+        
         # Kategoriye göre dağılım
         kategori_dagilim = {}
         for y in yatirimlar:
@@ -1610,6 +1741,59 @@ def export_portfolio_pdf():
                 </div>
             </div>
         """
+        
+        # Altın ve Döviz için alış/satış fiyatları bölümü ekle
+        if altin_doviz_yatirim_float > 0:
+            html_content += f"""
+            <div class="summary" style="border-left: 4px solid #ffc107;">
+                <h3 style="color: #ffc107;">Altın & Döviz - Alış/Satış Fiyatları Karşılaştırması</h3>
+                <div class="summary-grid">
+                    <div>
+                        <div class="summary-item">
+                            <span>Toplam Yatırım:</span>
+                            <span>₺{altin_doviz_yatirim_float:,.2f}</span>
+                        </div>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <table style="margin-top: 0; font-size: 11px;">
+                            <thead>
+                                <tr>
+                                    <th>Hesaplama Türü</th>
+                                    <th>Güncel Değer</th>
+                                    <th>Kar/Zarar</th>
+                                    <th>Getiri %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Alış Fiyatından</strong></td>
+                                    <td class="text-right">₺{altin_doviz_alis['guncel_deger']:,.2f}</td>
+                                    <td class="text-right {'text-success' if altin_doviz_alis['kar_zarar'] >= 0 else 'text-danger'}">
+                                        ₺{altin_doviz_alis['kar_zarar']:+,.2f}
+                                    </td>
+                                    <td class="text-right {'text-success' if altin_doviz_alis['kar_zarar_yuzde'] >= 0 else 'text-danger'}">
+                                        %{altin_doviz_alis['kar_zarar_yuzde']:+.2f}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Satış Fiyatından</strong></td>
+                                    <td class="text-right">₺{altin_doviz_satis['guncel_deger']:,.2f}</td>
+                                    <td class="text-right {'text-success' if altin_doviz_satis['kar_zarar'] >= 0 else 'text-danger'}">
+                                        ₺{altin_doviz_satis['kar_zarar']:+,.2f}
+                                    </td>
+                                    <td class="text-right {'text-success' if altin_doviz_satis['kar_zarar_yuzde'] >= 0 else 'text-danger'}">
+                                        %{altin_doviz_satis['kar_zarar_yuzde']:+.2f}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <p style="margin-top: 10px; font-size: 9px; color: #666; font-style: italic;">
+                    Not: Altın ve Döviz yatırımlarınız için alış ve satış fiyatlarından hesaplanan değerler yukarıda ayrı ayrı gösterilmektedir.
+                </p>
+            </div>
+            """
         
         # Kategori dağılımı ekle
         if kategori_dagilim:
