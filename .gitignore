@@ -1,5 +1,8 @@
 # Geçici veya büyük klasörleri dışla
 !!!/
+\!\!\!\//
+"!!!"/
 dist/
 build/
 .DS_Store
+__pycache__/
