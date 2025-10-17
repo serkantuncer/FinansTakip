@@ -2,7 +2,29 @@
 !!!/
 \!\!\!\//
 "!!!"/
+__pycache__/
+
+# Virtual environments
+.env/
+.venv/
+venv/
+env/
+
+# MacOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# PyInstaller
+*.spec
 dist/
 build/
-.DS_Store
-__pycache__/
+
+# Test / coverage
+.coverage
+htmlcov/
+*.log
+
+*.zip
+Dikkat_Calisan_Version/
