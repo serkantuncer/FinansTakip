@@ -27,6 +27,68 @@ ayağa kalkıp kalkmadığını kontrol et ve sonucu bildir.
 
 ---
 
+## GitHub Workflow — Branch ve Commit Kuralları
+
+### Başlangıçta (Sadece İlk Seferinde)
+
+İlk göreve başlamadan önce yeni bir branch oluştur:
+
+```bash
+git checkout -b feature/gelistirme
+git push -u origin feature/gelistirme
+```
+
+Bundan sonra tüm çalışmalar bu branch üzerinde ilerleyecek. `main` branch'e dokunma.
+
+### Her Görev Sonrası Commit Akışı
+
+Her görev tamamlandığında ve `python app.py` kontrolü geçildikten sonra bana şunu sor:
+
+```
+GÖREV [X] tamamlandı. Aşağıdaki değişiklikler commit edilecek:
+- [değiştirilen dosyalar listesi]
+- [ne yapıldığının özeti]
+
+Commit mesajı: "feat: GÖREV [X] - [kısa açıklama]"
+
+Onaylıyor musun? (evet/hayır)
+```
+
+Onay verdikten sonra:
+
+```bash
+git add .
+git commit -m "feat: GÖREV [X] - [kısa açıklama]"
+git push origin feature/gelistirme
+```
+
+### Commit Mesajı Formatı
+
+```
+feat: GÖREV 1a - hardcoded credentials .env dosyasına taşındı
+feat: GÖREV 1b - Flask-WTF ile CSRF koruması eklendi
+feat: GÖREV 2a - hesapla_portfoy_ozeti() yardımcı fonksiyonu oluşturuldu
+refactor: GÖREV 2b - yatirim gruplama fonksiyona çıkarıldı
+fix: GÖREV 3c - BIST fiyat parse try-except ile sarıldı
+```
+
+### Geri Alma Durumu
+
+Eğer bir görev sonrası uygulama bozulduysa ve geri almak istersen:
+
+```
+GÖREV [X] geri alınacak. Son commit revert edilsin mi? (evet/hayır)
+```
+
+Onay verdikten sonra:
+
+```bash
+git revert HEAD
+git push origin feature/gelistirme
+```
+
+---
+
 ---
 
 ## Proje Bağlamı
