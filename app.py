@@ -1910,6 +1910,39 @@ def fon_grubu_guncelle(yatirim_id):
     })
 
 
+@app.route('/api/stopaj_simulasyon/<int:yatirim_id>', methods=['POST'])
+@login_required
+def stopaj_simulasyon(yatirim_id):
+    """
+    Belirli bir satış fiyatı ve tarihi için stopaj simülasyonu yapar.
+    """
+    yatirim = Yatirim.query.get_or_404(yatirim_id)
+
+    if yatirim.user_id != current_user.id:
+        return jsonify({'error': 'Yetkisiz erisim'}), 403
+
+    data = request.get_json() or {}
+
+    satis_fiyati_str = data.get('satis_fiyati')
+    satis_tarihi_str = data.get('satis_tarihi')
+
+    satis_fiyati = Decimal(satis_fiyati_str) if satis_fiyati_str else None
+    satis_tarihi = datetime.strptime(satis_tarihi_str, '%Y-%m-%d') if satis_tarihi_str else None
+
+    hesap = stopaj_hesapla(yatirim, satis_tarihi=satis_tarihi, satis_fiyati=satis_fiyati)
+
+    return jsonify({
+        'success': True,
+        'brut_kar': float(hesap['brut_kar']),
+        'stopaj_orani': float(hesap['stopaj_orani']) if hesap['stopaj_orani'] else None,
+        'stopaj_tutari': float(hesap['stopaj_tutari']),
+        'net_kar': float(hesap['net_kar']),
+        'elde_tutma_gun': hesap['elde_tutma_gun'],
+        'fon_grubu': hesap['fon_grubu'],
+        'hesaplanamadi': hesap['hesaplanamadi']
+    })
+
+
 @app.route('/api/yatirim_grup/<kod>')
 @login_required
 def api_yatirim_grup(kod):
