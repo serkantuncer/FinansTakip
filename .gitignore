@@ -3,6 +3,9 @@
 \!\!\!\//
 "!!!"/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Virtual environments
 .env/
@@ -20,6 +23,15 @@ env/
 *.spec
 dist/
 build/
+*.egg-info/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
 
 # Test / coverage
 .coverage
