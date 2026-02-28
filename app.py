@@ -524,6 +524,85 @@ def fon_bilgisi_yatirima_kaydet(yatirim):
     return False
 
 
+def stopaj_orani_bul(fon_grubu, alis_tarihi, satis_tarihi=None):
+    """
+    Verilen fon grubu ve alış tarihine göre uygulanacak stopaj oranını döndürür.
+    """
+    if not fon_grubu:
+        return None
+
+    if satis_tarihi is None:
+        satis_tarihi = datetime.now()
+
+    alis_date = alis_tarihi.date() if hasattr(alis_tarihi, 'date') else alis_tarihi
+    satis_date = satis_tarihi.date() if hasattr(satis_tarihi, 'date') else satis_tarihi
+    elde_tutma_gun = (satis_date - alis_date).days
+
+    adaylar = StopajOrani.query.filter(
+        StopajOrani.fon_grubu == fon_grubu,
+        StopajOrani.donem_baslangic <= alis_date,
+        db.or_(
+            StopajOrani.donem_bitis >= alis_date,
+            StopajOrani.donem_bitis.is_(None)
+        )
+    ).all()
+
+    if not adaylar:
+        return None
+
+    for aday in adaylar:
+        if aday.elde_tutma_gun is not None:
+            if elde_tutma_gun < aday.elde_tutma_gun:
+                return Decimal(str(aday.oran))
+        else:
+            return Decimal(str(aday.oran))
+
+    return None
+
+
+def stopaj_hesapla(yatirim, satis_tarihi=None, satis_fiyati=None):
+    """
+    Bir yatırım için stopaj tutarını ve net kar/zarar hesaplar.
+    """
+    if satis_tarihi is None:
+        satis_tarihi = datetime.now()
+
+    if satis_fiyati is None:
+        satis_fiyati = yatirim.guncel_fiyat
+
+    maliyet = yatirim.alis_fiyati * yatirim.miktar
+    guncel_deger = (satis_fiyati * yatirim.miktar) if satis_fiyati else maliyet
+    brut_kar = guncel_deger - maliyet
+
+    elde_tutma_gun = (satis_tarihi.date() - yatirim.alis_tarihi.date()).days
+
+    oran = stopaj_orani_bul(yatirim.fon_grubu, yatirim.alis_tarihi, satis_tarihi)
+
+    if oran is None:
+        return {
+            'brut_kar': brut_kar,
+            'stopaj_orani': None,
+            'stopaj_tutari': Decimal('0'),
+            'net_kar': brut_kar,
+            'elde_tutma_gun': elde_tutma_gun,
+            'fon_grubu': yatirim.fon_grubu,
+            'hesaplanamadi': True
+        }
+
+    stopaj_tutari = (brut_kar * oran / 100) if brut_kar > 0 else Decimal('0')
+    net_kar = brut_kar - stopaj_tutari
+
+    return {
+        'brut_kar': brut_kar,
+        'stopaj_orani': oran,
+        'stopaj_tutari': stopaj_tutari,
+        'net_kar': net_kar,
+        'elde_tutma_gun': elde_tutma_gun,
+        'fon_grubu': yatirim.fon_grubu,
+        'hesaplanamadi': False
+    }
+
+
 # Uygulama başladığında veritabanını kontrol et
 try:
     init_database()
