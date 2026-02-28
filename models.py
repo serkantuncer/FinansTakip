@@ -33,7 +33,17 @@ class Yatirim(db.Model):
     guncel_satis_fiyat = db.Column(db.Numeric(precision=20, scale=6))  # Satış fiyatı (Altın/Döviz için)
     son_guncelleme = db.Column(db.DateTime)
     notlar = db.Column(db.Text)
-    kategori = db.Column(db.String(30))  # Opsiyonel kategori alanı
+    kategori = db.Column(db.String(30))
+
+    # Fon bilgisi alanlari - sadece tip='fon' icin kullanilir
+    fon_grubu = db.Column(db.String(1), nullable=True)  # 'A','B','C','D' - stopaj grubu
+    fon_tur_kodu = db.Column(db.String(10), nullable=True)  # TEFAS FONTURKOD
+    semsiye_fon_turu = db.Column(db.String(10), nullable=True)  # TEFAS FONTUR
+    fon_unvan_tipi = db.Column(db.String(100), nullable=True)  # Tam unvan tipi aciklamasi
+    kurucu_kodu = db.Column(db.String(20), nullable=True)  # Portfoy yoneticisi/kurucu kodu
+    fon_grubu_otomatik = db.Column(db.Boolean, default=False)  # True=TEFAS'tan otomatik, False=manuel
+    fon_bilgi_guncelleme = db.Column(db.DateTime, nullable=True)  # Son fon bilgisi guncelleme tarihi
+  # Opsiyonel kategori alanı
     
     # Foreign key to User
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -54,6 +64,13 @@ class Yatirim(db.Model):
             'son_guncelleme': self.son_guncelleme.strftime('%Y-%m-%d %H:%M') if self.son_guncelleme else None,
             'notlar': self.notlar,
             'kategori': self.kategori,
+
+            'fon_grubu': self.fon_grubu,
+            'fon_tur_kodu': self.fon_tur_kodu,
+            'semsiye_fon_turu': self.semsiye_fon_turu,
+            'fon_unvan_tipi': self.fon_unvan_tipi,
+            'kurucu_kodu': self.kurucu_kodu,
+            'fon_grubu_otomatik': self.fon_grubu_otomatik,
             'alis_tutari': float(self.alis_fiyati * self.miktar),
             'guncel_tutar': float(self.guncel_fiyat * self.miktar) if self.guncel_fiyat else None,
             'kar_zarar_tl': float((self.guncel_fiyat - self.alis_fiyati) * self.miktar) if self.guncel_fiyat else None,
