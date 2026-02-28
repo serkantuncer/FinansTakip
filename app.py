@@ -1878,6 +1878,38 @@ def api_yatirim_dogrula():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+
+@app.route('/api/fon_grubu_guncelle/<int:yatirim_id>', methods=['POST'])
+@login_required
+def fon_grubu_guncelle(yatirim_id):
+    """Bir fonun grubunu gunceller (stopaj hesabi icin gerekli)."""
+    yatirim = Yatirim.query.get_or_404(yatirim_id)
+
+    if yatirim.user_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Yetkisiz erisim'}), 403
+
+    if yatirim.tip != 'fon':
+        return jsonify({'success': False, 'error': 'Sadece fonlar icin gecerlidir'}), 400
+
+    data = request.get_json() or {}
+    fon_grubu = data.get('fon_grubu')
+
+    if fon_grubu not in ['A', 'B', 'C', 'D', None]:
+        return jsonify({'success': False, 'error': 'Gecersiz fon grubu'}), 400
+
+    yatirim.fon_grubu = fon_grubu
+    db.session.commit()
+
+    hesap = stopaj_hesapla(yatirim)
+    return jsonify({
+        'success': True,
+        'fon_grubu': fon_grubu,
+        'stopaj_orani': float(hesap['stopaj_orani']) if hesap['stopaj_orani'] else None,
+        'stopaj_tutari': float(hesap['stopaj_tutari']),
+        'net_kar': float(hesap['net_kar'])
+    })
+
+
 @app.route('/api/yatirim_grup/<kod>')
 @login_required
 def api_yatirim_grup(kod):
