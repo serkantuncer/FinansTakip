@@ -264,12 +264,6 @@ def migrate_existing_data():
     except Exception as e:
         app.logger.error(f"Veri taşıma hatası: {e}")
 
-# Uygulama başladığında veritabanını kontrol et
-try:
-    init_database()
-except Exception as e:
-    app.logger.error(f"Veritabanı initialization hatası: {e}")
-
 # Fiyat verisi için basit TTL cache
 _fiyat_cache = {}  # {cache_key: (veri, timestamp)}
 CACHE_TTL = 900  # 15 dakika
@@ -528,6 +522,13 @@ def fon_bilgisi_yatirima_kaydet(yatirim):
         db.session.commit()
         return True
     return False
+
+
+# Uygulama başladığında veritabanını kontrol et
+try:
+    init_database()
+except Exception as e:
+    app.logger.error(f"Veritabanı initialization hatası: {e}")
 
 def tefas_alternatif_arama(fon_kodu):
     """TEFAŞ alternatif API kullanarak fon arama"""
@@ -1457,7 +1458,21 @@ def yatirim_ekle():
             
             # İlk fiyat güncelleme ve isim doğrulama
             fiyat_guncelle(yatirim.id)
-            
+
+            if tip == 'fon':
+                fon_bilgisi_yatirima_kaydet(yatirim)
+                if yatirim.fon_grubu:
+                    grup_aciklamalari = {
+                        'A': 'Hisse Yoğun',
+                        'B': 'TL Standart',
+                        'C': 'Dövizli/Değişken',
+                        'D': 'GSYF/GYF'
+                    }
+                    app.logger.info(
+                        f"{kod} fonu Stopaj Grubu {yatirim.fon_grubu} "
+                        f"({grup_aciklamalari.get(yatirim.fon_grubu, '')}) olarak tanımlandı."
+                    )
+             
             # Yatırım ismini API'den gelen verilerle doğrula
             try:
                 if tip == 'fon':
