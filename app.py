@@ -1465,6 +1465,49 @@ def index():
                          altin_doviz_satis=altin_doviz_satis)
 
 
+@app.route('/stopaj')
+@login_required
+def stopaj_sayfasi():
+    """Tum fonlarin stopaj simulasyon sayfasi."""
+    fonlar = Yatirim.query.filter_by(
+        user_id=current_user.id,
+        tip='fon'
+    ).order_by(Yatirim.alis_tarihi.desc()).all()
+
+    fon_stopaj_listesi = []
+    for fon in fonlar:
+        hesap = stopaj_hesapla(fon)
+        fon_stopaj_listesi.append({
+            'yatirim': fon,
+            'hesap': hesap
+        })
+
+    fon_gruplari = {
+        'A': 'Grup A - Hisse Senedi Yogun Fon (HSYF)',
+        'B': 'Grup B - TL Standart (Para Piyasasi, Borclanma vb.)',
+        'C': 'Grup C - Dovizli / Degisken / Karma / Serbest',
+        'D': 'Grup D - GSYF / GYF'
+    }
+
+    toplam_brut_kar = sum(
+        float(item['hesap']['brut_kar']) for item in fon_stopaj_listesi
+        if item['hesap']['brut_kar'] > 0
+    )
+    toplam_stopaj = sum(
+        float(item['hesap']['stopaj_tutari']) for item in fon_stopaj_listesi
+    )
+    toplam_net_kar = toplam_brut_kar - toplam_stopaj
+
+    return render_template(
+        'stopaj.html',
+        fon_stopaj_listesi=fon_stopaj_listesi,
+        fon_gruplari=fon_gruplari,
+        toplam_brut_kar=toplam_brut_kar,
+        toplam_stopaj=toplam_stopaj,
+        toplam_net_kar=toplam_net_kar
+    )
+
+
 @app.route('/yatirimlar')
 @login_required
 def yatirimlar():
