@@ -1729,11 +1729,27 @@ def api_yatirim_dogrula():
             return jsonify({'success': False, 'error': 'Geçersiz yatırım tipi'})
         
         if result:
-            return jsonify({
+            yanit = {
                 'success': True,
                 'isim': result.get('isim', 'Bilinmeyen'),
                 'guncel_fiyat': float(result.get('guncel_fiyat', 0))
-            })
+            }
+
+            if tip == 'fon':
+                bilgi = fon_bilgisi_cek(kod)
+                if bilgi and bilgi.get('fon_grubu'):
+                    grup_etiketleri = {
+                        'A': 'Hisse Yoğun (Stopaj %0/%17.5)',
+                        'B': 'TL Standart',
+                        'C': 'Dövizli/Değişken',
+                        'D': 'GSYF/GYF'
+                    }
+                    yanit['fon_grubu'] = bilgi['fon_grubu']
+                    yanit['fon_grubu_etiket'] = grup_etiketleri.get(bilgi['fon_grubu'], '')
+                    yanit['fon_tur_kodu'] = bilgi.get('fon_tur_kodu', '')
+                    yanit['kurucu_kodu'] = bilgi.get('kurucu_kodu', '')
+
+            return jsonify(yanit)
         else:
             return jsonify({'success': False, 'error': 'Veri çekilemedi'})
             
