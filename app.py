@@ -10,7 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import requests
 import certifi
 import urllib3
@@ -118,7 +118,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 csrf = CSRFProtect(app)
 
 # Import and initialize database from models
-from models import db, User, Yatirim, FiyatGecmisi
+from models import db, User, Yatirim, FiyatGecmisi, StopajOrani
 from werkzeug.security import generate_password_hash
 
 db.init_app(app)
@@ -155,9 +155,43 @@ def init_database():
             
             # Check if we need to migrate existing data
             migrate_existing_data()
+            stopaj_seed_data()
             
         except Exception as e:
             app.logger.error(f"Veritabanı başlatma hatası: {e}")
+
+
+def stopaj_seed_data():
+    """StopajOrani tablosunu başlangıç verileriyle doldurur."""
+    if StopajOrani.query.count() > 0:
+        return
+
+    oranlar = [
+        # GRUP A — Hisse Senedi Yoğun Fon
+        StopajOrani(fon_grubu='A', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=0.00, aciklama='HSYF - 09.07.2025 öncesi tüm alımlar'),
+        StopajOrani(fon_grubu='A', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=365, oran=17.50, aciklama='HSYF - 09.07.2025 sonrası, 1 yıldan az elde tutma'),
+        StopajOrani(fon_grubu='A', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=0.00, aciklama='HSYF - 09.07.2025 sonrası, 1 yıl ve üzeri elde tutma'),
+        # GRUP B — TL Standart Fonlar
+        StopajOrani(fon_grubu='B', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2020, 12, 22), elde_tutma_gun=None, oran=10.00, aciklama='TL Standart - 23.12.2020 öncesi'),
+        StopajOrani(fon_grubu='B', donem_baslangic=date(2020, 12, 23), donem_bitis=date(2024, 4, 30), elde_tutma_gun=None, oran=0.00, aciklama='TL Standart - indirimli dönem'),
+        StopajOrani(fon_grubu='B', donem_baslangic=date(2024, 5, 1), donem_bitis=date(2024, 10, 31), elde_tutma_gun=None, oran=7.50, aciklama='TL Standart - kademeli artış 1'),
+        StopajOrani(fon_grubu='B', donem_baslangic=date(2024, 11, 1), donem_bitis=date(2025, 1, 31), elde_tutma_gun=None, oran=10.00, aciklama='TL Standart - kademeli artış 2'),
+        StopajOrani(fon_grubu='B', donem_baslangic=date(2025, 2, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=15.00, aciklama='TL Standart - kademeli artış 3'),
+        StopajOrani(fon_grubu='B', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=17.50, aciklama='TL Standart - güncel oran'),
+        # GRUP C — Dövizli / Değişken / Diğer
+        StopajOrani(fon_grubu='C', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=10.00, aciklama='Dövizli/Değişken - 09.07.2025 öncesi'),
+        StopajOrani(fon_grubu='C', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=17.50, aciklama='Dövizli/Değişken - güncel oran'),
+        # GRUP D — GSYF & GYF
+        StopajOrani(fon_grubu='D', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=730, oran=10.00, aciklama='GSYF/GYF - 2 yıldan az'),
+        StopajOrani(fon_grubu='D', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=0.00, aciklama='GSYF/GYF - 2 yıl ve üzeri'),
+        StopajOrani(fon_grubu='D', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=730, oran=17.50, aciklama='GSYF/GYF - 09.07.2025 sonrası, 2 yıldan az'),
+        StopajOrani(fon_grubu='D', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=0.00, aciklama='GSYF/GYF - 09.07.2025 sonrası, 2 yıl ve üzeri'),
+    ]
+
+    for oran in oranlar:
+        db.session.add(oran)
+    db.session.commit()
+    app.logger.info("Stopaj oranları seed data yüklendi.")
 
 def migrate_existing_data():
     """Mevcut verileri user_id olmadan oluşturulmuş tablolardan yeni yapıya taşır."""
