@@ -3,6 +3,8 @@ import os
 import sys
 import shutil
 import logging
+import time
+from collections import defaultdict
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -10,6 +12,11 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import requests
+import certifi
+import urllib3
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 import pandas as pd
 import json
@@ -20,10 +27,32 @@ import plotly.graph_objects as go
 from functools import wraps
 import re
 import xml.etree.ElementTree as ET
+from dotenv import load_dotenv
+from flask_wtf.csrf import CSRFProtect
 
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
+
+# .env dosyasını yükle
+load_dotenv()
+
+
+def http_session_olustur():
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+
+http_session = http_session_olustur()
 
 def resource_path(relative_path):
     """PyInstaller paketindeki dosyaların yolunu bulur."""
@@ -42,7 +71,7 @@ def get_writable_db_path():
         
         if not os.path.exists(app_data_dir):
             os.makedirs(app_data_dir)
-            print(f"Uygulama veri klasörü oluşturuldu: {app_data_dir}")
+            logging.info(f"Uygulama veri klasörü oluşturuldu: {app_data_dir}")
         
         target_db_path = os.path.join(app_data_dir, "finans_takip.db")
         
@@ -51,12 +80,12 @@ def get_writable_db_path():
             if os.path.exists(bundled_db_path):
                 try:
                     shutil.copy2(bundled_db_path, target_db_path)
-                    print(f"Veritabanı kopyalandı: {bundled_db_path} -> {target_db_path}")
+                    logging.info(f"Veritabanı kopyalandı: {bundled_db_path} -> {target_db_path}")
                 except Exception as e:
-                    print(f"Veritabanı kopyalama hatası: {e}")
+                    logging.error(f"Veritabanı kopyalama hatası: {e}")
             else:
-                print(f"Paket içinde veritabanı bulunamadı: {bundled_db_path}")
-                print("Yeni veritabanı oluşturulacak...")
+                logging.warning(f"Paket içinde veritabanı bulunamadı: {bundled_db_path}")
+                logging.info("Yeni veritabanı oluşturulacak...")
         
         return target_db_path
     else:
@@ -69,14 +98,24 @@ def get_writable_db_path():
         return os.path.abspath(db_path)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "finanstakip2025_default_secret_key")
-app.config['SESSION_COOKIE_SECURE'] = False  # Allow cookies over HTTP for development
+flask_env = os.environ.get("FLASK_ENV", "").lower()
+secret = os.environ.get("SESSION_SECRET")
+if not secret:
+    if flask_env == "production":
+        raise ValueError("SESSION_SECRET ortam degiskeni tanimlanmamis!")
+    secret = "dev-insecure-session-secret-change-me"
+    logging.warning("SESSION_SECRET yok; development fallback secret kullaniliyor.")
+app.secret_key = secret
+app.config['SESSION_COOKIE_SECURE'] = flask_env == "production"
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Database configuration - use SQLite
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{get_writable_db_path()}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# CSRF koruması
+csrf = CSRFProtect(app)
 
 # Import and initialize database from models
 from models import db, User, Yatirim, FiyatGecmisi
@@ -99,12 +138,12 @@ app.register_blueprint(auth_bp)
 @login_manager.user_loader
 def load_user(user_id):
     try:
-        print(f"Loading user with ID: {user_id}")
+        app.logger.debug(f"Loading user with ID: {user_id}")
         user = User.query.get(int(user_id))
-        print(f"User loaded: {user.username if user else None}")
+        app.logger.debug(f"User loaded: {user.username if user else None}")
         return user
     except Exception as e:
-        print(f"User loading error: {e}")
+        app.logger.error(f"User loading error: {e}")
         return None
 
 def init_database():
@@ -112,13 +151,13 @@ def init_database():
     with app.app_context():
         try:
             db.create_all()
-            print("Veritabanı tabloları kontrol edildi/oluşturuldu.")
+            app.logger.info("Veritabanı tabloları kontrol edildi/oluşturuldu.")
             
             # Check if we need to migrate existing data
             migrate_existing_data()
             
         except Exception as e:
-            print(f"Veritabanı başlatma hatası: {e}")
+            app.logger.error(f"Veritabanı başlatma hatası: {e}")
 
 def migrate_existing_data():
     """Mevcut verileri user_id olmadan oluşturulmuş tablolardan yeni yapıya taşır."""
@@ -127,7 +166,7 @@ def migrate_existing_data():
         orphaned_investments = Yatirim.query.filter_by(user_id=None).all()
         
         if orphaned_investments:
-            print(f"Kullanıcısız {len(orphaned_investments)} yatırım kaydı bulundu. Varsayılan kullanıcıya atanıyor...")
+            app.logger.warning(f"Kullanıcısız {len(orphaned_investments)} yatırım kaydı bulundu. Varsayılan kullanıcıya atanıyor...")
             
             # Create a default user if none exists
             default_user = User.query.filter_by(username='admin').first()
@@ -139,28 +178,72 @@ def migrate_existing_data():
                 )
                 db.session.add(default_user)
                 db.session.commit()
-                print("Varsayılan admin kullanıcısı oluşturuldu (admin/admin123)")
+                app.logger.info("Varsayılan admin kullanıcısı oluşturuldu (admin/admin123)")
             
             # Assign orphaned investments to default user
             for investment in orphaned_investments:
                 investment.user_id = default_user.id
             
             db.session.commit()
-            print(f"{len(orphaned_investments)} yatırım kaydı admin kullanıcısına atandı.")
+            app.logger.info(f"{len(orphaned_investments)} yatırım kaydı admin kullanıcısına atandı.")
             
     except Exception as e:
-        print(f"Veri taşıma hatası: {e}")
+        app.logger.error(f"Veri taşıma hatası: {e}")
 
 # Uygulama başladığında veritabanını kontrol et
 try:
     init_database()
 except Exception as e:
-    print(f"Veritabanı initialization hatası: {e}")
+    app.logger.error(f"Veritabanı initialization hatası: {e}")
+
+# Fiyat verisi için basit TTL cache
+_fiyat_cache = {}  # {cache_key: (veri, timestamp)}
+CACHE_TTL = 900  # 15 dakika
+_bist_ssl_fallback_warned_symbols = set()
+_cache_hit_logged_keys = set()
+ALTIN_VERBOSE_DEBUG = os.environ.get("ALTIN_VERBOSE_DEBUG", "0") == "1"
+
+
+def _log_cache_hit_once(kaynak, kod):
+    key = f"{kaynak}:{kod}"
+    if key not in _cache_hit_logged_keys:
+        app.logger.debug(f"{kaynak} cache hit: {kod}")
+        _cache_hit_logged_keys.add(key)
+
+
+def _cache_key(varlik_tipi, kod):
+    return f"{varlik_tipi}:{kod.upper()}"
+
+
+def cache_den_al(varlik_tipi, kod):
+    key = _cache_key(varlik_tipi, kod)
+    kayit = _fiyat_cache.get(key)
+    if not kayit:
+        return None
+
+    veri, ts = kayit
+    if time.time() - ts < CACHE_TTL:
+        return veri
+
+    _fiyat_cache.pop(key, None)
+    return None
+
+
+def cache_kaydet(varlik_tipi, kod, veri):
+    if not veri:
+        return
+    _fiyat_cache[_cache_key(varlik_tipi, kod)] = (veri, time.time())
+
 
 # Veri çekme fonksiyonları
 def tefas_fon_verisi_cek(fon_kodu):
     """TEFAŞ'tan fon verisi çeker - Güncellenmiş Versiyon"""
     fon_kodu_upper = fon_kodu.upper()
+    cached_veri = cache_den_al('fon', fon_kodu_upper)
+    if cached_veri:
+        _log_cache_hit_once("TEFAS", fon_kodu_upper)
+        return cached_veri
+
     url = f"https://www.tefas.gov.tr/FonAnaliz.aspx?FonKod={fon_kodu_upper}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -169,8 +252,7 @@ def tefas_fon_verisi_cek(fon_kodu):
     app.logger.info(f"TEFAŞ Verisi Çekiliyor: {fon_kodu_upper} - URL: {url}")
     
     try:
-        session = requests.Session()
-        response = session.get(url, headers=headers, timeout=15)
+        response = http_session.get(url, headers=headers, timeout=15)
         
         if response.status_code != 200:
             app.logger.warning(f"TEFAŞ sayfası ({fon_kodu_upper}) HTTP {response.status_code} hatası verdi.")
@@ -253,6 +335,7 @@ def tefas_fon_verisi_cek(fon_kodu):
             'guncel_fiyat': fiyat,
             'tarih': datetime.now()
         }
+        cache_kaydet('fon', fon_kodu_upper, veri)
         app.logger.info(f"TEFAŞ Verisi Başarıyla Çekildi: {fon_kodu_upper} - Veri: {veri}")
         return veri
         
@@ -271,9 +354,15 @@ def tefas_fon_verisi_cek(fon_kodu):
 
 def tefas_alternatif_arama(fon_kodu):
     """TEFAŞ alternatif API kullanarak fon arama"""
+    fon_kodu_upper = fon_kodu.upper()
+    cached_veri = cache_den_al('fon', fon_kodu_upper)
+    if cached_veri:
+        _log_cache_hit_once("TEFAS", fon_kodu_upper)
+        return cached_veri
+
     try:
         # TEFAS public API endpoint
-        api_url = f"https://www.tefas.gov.tr/api/DB/BindHistoryInfo?fontip=YAT&sfontur=&kurucukod=&fonkod={fon_kodu}&bastarih=&bittarih="
+        api_url = f"https://www.tefas.gov.tr/api/DB/BindHistoryInfo?fontip=YAT&sfontur=&kurucukod=&fonkod={fon_kodu_upper}&bastarih=&bittarih="
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -281,18 +370,20 @@ def tefas_alternatif_arama(fon_kodu):
             'Referer': 'https://www.tefas.gov.tr/'
         }
         
-        app.logger.info(f"TEFAŞ Alternatif API deneniyor: {fon_kodu}")
-        response = requests.get(api_url, headers=headers, timeout=15)
+        app.logger.info(f"TEFAŞ Alternatif API deneniyor: {fon_kodu_upper}")
+        response = http_session.get(api_url, headers=headers, timeout=15)
         
         if response.status_code == 200:
             data = response.json()
             if data and len(data) > 0:
                 latest_data = data[0]  # En son veri
-                return {
+                veri = {
                     'isim': latest_data.get('FONUNVAN', f"{fon_kodu} Fonu"),
                     'guncel_fiyat': Decimal(str(latest_data.get('FIYAT', 0))),
                     'tarih': datetime.now()
                 }
+                cache_kaydet('fon', fon_kodu_upper, veri)
+                return veri
         
         app.logger.warning(f"TEFAŞ alternatif API'den {fon_kodu} bulunamadı")
         return None
@@ -304,6 +395,11 @@ def tefas_alternatif_arama(fon_kodu):
 def bist_hisse_verisi_cek(hisse_kodu):
     """İş Yatırım'dan hisse verisi çeker"""
     hisse_kodu_upper = hisse_kodu.upper()
+    cached_veri = cache_den_al('hisse', hisse_kodu_upper)
+    if cached_veri:
+        _log_cache_hit_once("BIST", hisse_kodu_upper)
+        return cached_veri
+
     api_url = f"https://www.isyatirim.com.tr/tr-tr/_layouts/Isyatirim.Website/Common/Data.aspx/OneEndeks?endeks={hisse_kodu_upper}"
 
     headers = {
@@ -312,26 +408,50 @@ def bist_hisse_verisi_cek(hisse_kodu):
     }
 
     try:
-        response = requests.get(api_url, headers=headers, timeout=15)
+        response = http_session.get(api_url, headers=headers, timeout=15, verify=certifi.where())
         response.raise_for_status()
+    except requests.exceptions.SSLError as ssl_err:
+        if os.environ.get("FLASK_ENV", "").lower() == "production":
+            app.logger.error(f"BIST SSL doğrulama hatası (production): {ssl_err}")
+            return None
 
+        if hisse_kodu_upper not in _bist_ssl_fallback_warned_symbols:
+            app.logger.warning(f"BIST SSL doğrulama hatası, development fallback kullanılacak: {ssl_err}")
+            _bist_ssl_fallback_warned_symbols.add(hisse_kodu_upper)
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        try:
+            response = http_session.get(api_url, headers=headers, timeout=15, verify=False)
+            response.raise_for_status()
+        except Exception as e:
+            app.logger.error(f"BIST veri çekme hatası (SSL fallback sonrası): {str(e)}")
+            return None
+    except Exception as e:
+        app.logger.error(f"BIST veri çekme hatası: {str(e)}")
+        return None
+
+    try:
         data = response.json()
-        app.logger.info(f"API'den dönen veri: {data}")
+        app.logger.debug(f"BIST API veri boyutu: {len(data) if isinstance(data, list) else 0}")
 
         if isinstance(data, list) and len(data) > 0:
             hisse_bilgisi = data[0]
 
             if "last" in hisse_bilgisi and "symbol" in hisse_bilgisi:
-                fiyat_text = hisse_bilgisi["last"]
                 isim = hisse_bilgisi["symbol"]
 
-                fiyat = Decimal(fiyat_text)
+                try:
+                    fiyat = Decimal(str(hisse_bilgisi["last"]).replace(',', '.'))
+                except (InvalidOperation, ValueError, KeyError) as e:
+                    app.logger.error(f"BIST fiyat parse hatası ({hisse_kodu_upper}): {e}")
+                    return None
 
-                return {
+                veri = {
                     'isim': isim.strip(),
                     'guncel_fiyat': fiyat,
                     'tarih': datetime.now()
                 }
+                cache_kaydet('hisse', hisse_kodu_upper, veri)
+                return veri
 
         return None
     except Exception as e:
@@ -342,15 +462,19 @@ def altin_verisi_cek(altin_turu_kodu):
     """Altinkaynak servisine manuel SOAP isteği göndererek altın fiyatlarını çeker."""
     service_url = 'http://data.altinkaynak.com/DataService.asmx'
     altin_turu_kodu_upper = altin_turu_kodu.upper()
+    cached_veri = cache_den_al('altin', altin_turu_kodu_upper)
+    if cached_veri:
+        _log_cache_hit_once("Altin", altin_turu_kodu_upper)
+        return cached_veri
+
     app.logger.info(f"Altın Verisi Çekiliyor (Altinkaynak Manuel SOAP): {altin_turu_kodu_upper} - URL: {service_url}")
 
-    # Try different authentication methods
-    username = 'AltinkaynakWebServis'
-    password = 'AltinkaynakWebServis'
-    
-    # Check for custom API credentials from environment
-    alt_username = os.environ.get('ALTINKAYNAK_USERNAME', username)
-    alt_password = os.environ.get('ALTINKAYNAK_PASSWORD', password)
+    alt_username = os.environ.get('ALTINKAYNAK_USERNAME')
+    alt_password = os.environ.get('ALTINKAYNAK_PASSWORD')
+
+    if not alt_username or not alt_password:
+        app.logger.error('ALTINKAYNAK_USERNAME veya ALTINKAYNAK_PASSWORD tanımlanmamış.')
+        return None
 
     # XML içindeki 'Aciklama' etiketine göre eşleştirme (YANITTAN ALINAN GERÇEK DEĞERLER!)
     altin_tipi_map = {
@@ -370,8 +494,8 @@ def altin_verisi_cek(altin_turu_kodu):
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
   <soap:Header>
     <AuthHeader xmlns="http://data.altinkaynak.com/">
-      <Username>{username}</Username>
-      <Password>{password}</Password>
+      <Username>{alt_username}</Username>
+      <Password>{alt_password}</Password>
     </AuthHeader>
   </soap:Header>
   <soap:Body>
@@ -388,7 +512,7 @@ def altin_verisi_cek(altin_turu_kodu):
 
     try:
         # POST isteğini gönderme
-        response = requests.post(service_url, headers=headers, data=soap_xml.encode('utf-8'), timeout=20)
+        response = http_session.post(service_url, headers=headers, data=soap_xml.encode('utf-8'), timeout=20)
         response.raise_for_status() # HTTP 4xx/5xx hatalarını kontrol et
 
         # Yanıt XML'ini parse etme
@@ -411,17 +535,20 @@ def altin_verisi_cek(altin_turu_kodu):
 
             inner_xml_string = get_gold_result_element.text
             # TAM YANITI LOGLA (DEBUG İÇİN) - Eğer çok uzunsa sorun olabilir, gerekirse kısaltılabilir.
-            app.logger.debug(f"Altinkaynak GetGoldResult İçerik Stringi (ilk 1000kr): {inner_xml_string[:1000]}...") # İlk 1000 karakter daha güvenli
+            if ALTIN_VERBOSE_DEBUG:
+                app.logger.debug(f"Altinkaynak GetGoldResult İçerik Stringi (ilk 1000kr): {inner_xml_string[:1000]}...")
 
             # --- Bu string'i de XML olarak parse et ---
             try:
                 inner_root = ET.fromstring(inner_xml_string)
-                app.logger.debug(f"Inner XML root tag adı: '{inner_root.tag}'") # Beklenen: Kurlar
+                if ALTIN_VERBOSE_DEBUG:
+                    app.logger.debug(f"Inner XML root tag adı: '{inner_root.tag}'")
                 altin_bulundu = False
 
                 # Inner XML içindeki altın kayıtlarını bul (Yapı: <Kur>...</Kur>)
                 kur_elements = inner_root.findall('./Kur') # Doğrudan root altındaki Kur'ları ara
-                app.logger.debug(f"Toplam {len(kur_elements)} adet <Kur> elementi bulundu.")
+                if ALTIN_VERBOSE_DEBUG:
+                    app.logger.debug(f"Toplam {len(kur_elements)} adet <Kur> elementi bulundu.")
 
                 for i, kur_element in enumerate(kur_elements):
                     aciklama_raw = kur_element.findtext('Aciklama')
@@ -435,8 +562,9 @@ def altin_verisi_cek(altin_turu_kodu):
                         bulunan_lower = aciklama_clean.lower()
                         eslesme_sonucu = (aranan_lower == bulunan_lower)
 
-                        app.logger.debug(f"{log_prefix} Aciklama Raw: '{aciklama_raw}', Clean: '{aciklama_clean}', Satis: '{satis_str}'")
-                        app.logger.debug(f"{log_prefix} KARŞILAŞTIRMA: Aranan (lower): '{aranan_lower}', Bulunan (lower): '{bulunan_lower}', SONUÇ (==): {eslesme_sonucu}")
+                        if ALTIN_VERBOSE_DEBUG:
+                            app.logger.debug(f"{log_prefix} Aciklama Raw: '{aciklama_raw}', Clean: '{aciklama_clean}', Satis: '{satis_str}'")
+                            app.logger.debug(f"{log_prefix} KARŞILAŞTIRMA: Aranan (lower): '{aranan_lower}', Bulunan (lower): '{bulunan_lower}', SONUÇ (==): {eslesme_sonucu}")
 
                         if eslesme_sonucu: # Tam eşleşme kontrolü
                             try:
@@ -461,6 +589,7 @@ def altin_verisi_cek(altin_turu_kodu):
                                 'satis_fiyat': fiyat,   # Selling price (explicit)
                                 'tarih': datetime.now()
                             }
+                            cache_kaydet('altin', altin_turu_kodu_upper, veri)
                             app.logger.info(f"Altinkaynak Altın Verisi (Manuel SOAP) Başarıyla Çekildi: {altin_turu_kodu_upper} ({aciklama_clean}) - Fiyat: {fiyat}")
                             altin_bulundu = True
                             return veri # Eşleşme bulundu, döngüden ve fonksiyondan çık
@@ -499,6 +628,11 @@ def altin_verisi_cek(altin_turu_kodu):
 def doviz_verisi_cek(doviz_kodu):
     """TCMB'den döviz verisi çeker"""
     doviz_kodu_upper = doviz_kodu.upper()
+    cached_veri = cache_den_al('doviz', doviz_kodu_upper)
+    if cached_veri:
+        _log_cache_hit_once("Doviz", doviz_kodu_upper)
+        return cached_veri
+
     app.logger.info(f"Döviz Verisi Çekiliyor: {doviz_kodu_upper}")
     
     try:
@@ -515,10 +649,10 @@ def doviz_verisi_cek(doviz_kodu):
             month_year = target_date.strftime('%Y%m')
             url = f"https://www.tcmb.gov.tr/kurlar/{month_year}/{date_str}.xml"
             
-            app.logger.info(f"TCMB URL deneniyor: {url}")
+            app.logger.debug(f"TCMB URL deneniyor: {url}")
             
             try:
-                response = requests.get(url, timeout=15)
+                response = http_session.get(url, timeout=15)
                 if response.status_code == 200:
                     app.logger.info(f"TCMB verisi başarıyla alındı: {url}")
                     break
@@ -584,6 +718,7 @@ def doviz_verisi_cek(doviz_kodu):
                         'satis_fiyat': satis_fiyat,
                         'tarih': datetime.now()
                     }
+                    cache_kaydet('doviz', doviz_kodu_upper, veri)
                     app.logger.info(f"TCMB Döviz Verisi Başarıyla Çekildi: {doviz_kodu_upper} - Veri: {veri}")
                     return veri
                 else:
@@ -656,42 +791,33 @@ def fiyat_guncelle(yatirim_id):
         return False, "Fiyat verisi alınamadı"
 
 
-# Ana sayfa route'u - Düzeltilmiş versiyon
-@app.route('/')
-@login_required
-def index():
-    # Kullanıcının yatırımlarını getir
-    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).order_by(Yatirim.alis_tarihi.desc()).all()
-    
-    # Özet istatistikler - Düzeltilmiş hesaplama
+def fiyat_verisi_cek_by_tip_kod(tip, kod):
+    """DB yazmadan, tip+kod bazında sadece fiyat verisini çeker."""
+    try:
+        if tip == 'fon':
+            veri = tefas_fon_verisi_cek(kod)
+        elif tip == 'hisse':
+            veri = bist_hisse_verisi_cek(kod)
+        elif tip == 'altin':
+            veri = altin_verisi_cek(kod)
+        elif tip == 'doviz':
+            veri = doviz_verisi_cek(kod)
+        else:
+            return False, None
+
+        return (veri is not None), veri
+    except Exception as e:
+        app.logger.error(f"fiyat_verisi_cek_by_tip_kod hatası ({tip}:{kod}): {e}", exc_info=True)
+        return False, None
+
+
+def hesapla_portfoy_ozeti(yatirimlar):
+    """Verilen yatırım listesi için portföy özet istatistiklerini hesaplar."""
     toplam_yatirim = Decimal('0')
     guncel_deger = Decimal('0')
-    
-    for y in yatirimlar:
-        # Maliyet hesaplama
-        maliyet = y.alis_fiyati * y.miktar
-        toplam_yatirim += maliyet
-        
-        # Güncel değer hesaplama
-        if y.guncel_fiyat and y.guncel_fiyat > 0:
-            yatirim_guncel_deger = y.guncel_fiyat * y.miktar
-            guncel_deger += yatirim_guncel_deger
-            print(f"Yatırım: {y.kod}, Güncel Fiyat: {y.guncel_fiyat}, Miktar: {y.miktar}, Güncel Değer: {yatirim_guncel_deger}")
-        else:
-            # Güncel fiyat yoksa maliyet fiyatını kullan
-            guncel_deger += maliyet
-            print(f"Yatırım: {y.kod}, Güncel fiyat yok, Maliyet kullanıldı: {maliyet}")
-    
-    print(f"Toplam Güncel Değer: {guncel_deger}")
-    
-    # Float'a çevir
-    toplam_yatirim_float = float(toplam_yatirim)
-    guncel_deger_float = float(guncel_deger)
-    
-    kar_zarar = guncel_deger_float - toplam_yatirim_float
-    kar_zarar_yuzde = (kar_zarar / toplam_yatirim_float * 100) if toplam_yatirim_float > 0 else 0
-    
-    # Altın ve Döviz için alış/satış fiyatlarından ayrı hesaplamalar
+    kategori_dagilim = {}
+    tip_ozet = {}
+
     altin_doviz_alis = {
         'guncel_deger': Decimal('0'),
         'kar_zarar': Decimal('0'),
@@ -703,58 +829,24 @@ def index():
         'kar_zarar_yuzde': 0
     }
     altin_doviz_yatirim = Decimal('0')
-    
+
     for y in yatirimlar:
-        if y.tip in ['altin', 'doviz']:
-            maliyet = y.alis_fiyati * y.miktar
-            altin_doviz_yatirim += maliyet
-            
-            # Alış fiyatından hesaplama
-            if y.guncel_alis_fiyat and y.guncel_alis_fiyat > 0:
-                altin_doviz_alis['guncel_deger'] += y.guncel_alis_fiyat * y.miktar
-            elif y.guncel_fiyat and y.guncel_fiyat > 0:
-                altin_doviz_alis['guncel_deger'] += y.guncel_fiyat * y.miktar
-            else:
-                altin_doviz_alis['guncel_deger'] += maliyet
-            
-            # Satış fiyatından hesaplama
-            if y.guncel_satis_fiyat and y.guncel_satis_fiyat > 0:
-                altin_doviz_satis['guncel_deger'] += y.guncel_satis_fiyat * y.miktar
-            elif y.guncel_fiyat and y.guncel_fiyat > 0:
-                altin_doviz_satis['guncel_deger'] += y.guncel_fiyat * y.miktar
-            else:
-                altin_doviz_satis['guncel_deger'] += maliyet
-    
-    # Float'a çevir ve kar/zarar hesapla
-    if altin_doviz_yatirim > 0:
-        altin_doviz_alis['guncel_deger'] = float(altin_doviz_alis['guncel_deger'])
-        altin_doviz_alis['kar_zarar'] = altin_doviz_alis['guncel_deger'] - float(altin_doviz_yatirim)
-        altin_doviz_alis['kar_zarar_yuzde'] = (altin_doviz_alis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
-        
-        altin_doviz_satis['guncel_deger'] = float(altin_doviz_satis['guncel_deger'])
-        altin_doviz_satis['kar_zarar'] = altin_doviz_satis['guncel_deger'] - float(altin_doviz_yatirim)
-        altin_doviz_satis['kar_zarar_yuzde'] = (altin_doviz_satis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
-    
-    altin_doviz_yatirim_float = float(altin_doviz_yatirim)
-    
-    # Kategoriye göre dağılım - Düzeltilmiş
-    kategori_dagilim = {}
-    for y in yatirimlar:
+        maliyet = y.alis_fiyati * y.miktar
+        toplam_yatirim += maliyet
+
+        if y.guncel_fiyat and y.guncel_fiyat > 0:
+            guncel_deger += y.guncel_fiyat * y.miktar
+        else:
+            guncel_deger += maliyet
+
         kategori = y.kategori or 'Diğer'
         if kategori not in kategori_dagilim:
             kategori_dagilim[kategori] = Decimal('0')
-        
         if y.guncel_fiyat and y.guncel_fiyat > 0:
             kategori_dagilim[kategori] += y.guncel_fiyat * y.miktar
         else:
-            kategori_dagilim[kategori] += y.alis_fiyati * y.miktar
-    
-    # Float'a çevir
-    kategori_dagilim = {k: float(v) for k, v in kategori_dagilim.items()}
-    
-    # Varlık tiplerine göre özet - Düzeltilmiş
-    tip_ozet = {}
-    for y in yatirimlar:
+            kategori_dagilim[kategori] += maliyet
+
         tip = y.tip
         if tip not in tip_ozet:
             tip_ozet[tip] = {
@@ -765,77 +857,272 @@ def index():
                 'kar_zarar_yuzde': 0,
                 'agirlik': 0
             }
-        
-        maliyet = y.alis_fiyati * y.miktar
         tip_ozet[tip]['maliyet'] += maliyet
-        
         if y.guncel_fiyat and y.guncel_fiyat > 0:
-            gdeger = y.guncel_fiyat * y.miktar
-            tip_ozet[tip]['guncel_deger'] += gdeger
+            tip_ozet[tip]['guncel_deger'] += y.guncel_fiyat * y.miktar
         else:
             tip_ozet[tip]['guncel_deger'] += maliyet
-    
-    # Tip özet hesaplamaları - Float'a çevir
+
+        if y.tip in ['altin', 'doviz']:
+            altin_doviz_yatirim += maliyet
+
+            if y.guncel_alis_fiyat and y.guncel_alis_fiyat > 0:
+                altin_doviz_alis['guncel_deger'] += y.guncel_alis_fiyat * y.miktar
+            elif y.guncel_fiyat and y.guncel_fiyat > 0:
+                altin_doviz_alis['guncel_deger'] += y.guncel_fiyat * y.miktar
+            else:
+                altin_doviz_alis['guncel_deger'] += maliyet
+
+            if y.guncel_satis_fiyat and y.guncel_satis_fiyat > 0:
+                altin_doviz_satis['guncel_deger'] += y.guncel_satis_fiyat * y.miktar
+            elif y.guncel_fiyat and y.guncel_fiyat > 0:
+                altin_doviz_satis['guncel_deger'] += y.guncel_fiyat * y.miktar
+            else:
+                altin_doviz_satis['guncel_deger'] += maliyet
+
+    toplam_yatirim_float = float(toplam_yatirim)
+    guncel_deger_float = float(guncel_deger)
+    kar_zarar = guncel_deger_float - toplam_yatirim_float
+    kar_zarar_yuzde = (kar_zarar / toplam_yatirim_float * 100) if toplam_yatirim_float > 0 else 0
+
+    if altin_doviz_yatirim > 0:
+        altin_doviz_yatirim_float = float(altin_doviz_yatirim)
+        altin_doviz_alis['guncel_deger'] = float(altin_doviz_alis['guncel_deger'])
+        altin_doviz_alis['kar_zarar'] = altin_doviz_alis['guncel_deger'] - altin_doviz_yatirim_float
+        altin_doviz_alis['kar_zarar_yuzde'] = (altin_doviz_alis['kar_zarar'] / altin_doviz_yatirim_float * 100)
+        altin_doviz_satis['guncel_deger'] = float(altin_doviz_satis['guncel_deger'])
+        altin_doviz_satis['kar_zarar'] = altin_doviz_satis['guncel_deger'] - altin_doviz_yatirim_float
+        altin_doviz_satis['kar_zarar_yuzde'] = (altin_doviz_satis['kar_zarar'] / altin_doviz_yatirim_float * 100)
+    else:
+        altin_doviz_yatirim_float = 0.0
+        altin_doviz_alis['guncel_deger'] = 0.0
+        altin_doviz_satis['guncel_deger'] = 0.0
+
+    kategori_dagilim = {k: float(v) for k, v in kategori_dagilim.items()}
+
     for tip_data in tip_ozet.values():
         tip_data['maliyet'] = float(tip_data['maliyet'])
         tip_data['guncel_deger'] = float(tip_data['guncel_deger'])
         tip_data['kar_zarar'] = tip_data['guncel_deger'] - tip_data['maliyet']
         tip_data['kar_zarar_yuzde'] = (tip_data['kar_zarar'] / tip_data['maliyet'] * 100) if tip_data['maliyet'] > 0 else 0
         tip_data['agirlik'] = (tip_data['guncel_deger'] / guncel_deger_float * 100) if guncel_deger_float > 0 else 0
-        
-    # Performans sıralaması - Gruplu hesaplama
-    yatirim_gruplari = {}
+
+    return {
+        'toplam_yatirim': toplam_yatirim_float,
+        'guncel_deger': guncel_deger_float,
+        'kar_zarar': kar_zarar,
+        'kar_zarar_yuzde': kar_zarar_yuzde,
+        'kategori_dagilim': kategori_dagilim,
+        'tip_ozet': tip_ozet,
+        'altin_doviz_yatirim': altin_doviz_yatirim_float,
+        'altin_doviz_alis': altin_doviz_alis,
+        'altin_doviz_satis': altin_doviz_satis
+    }
+
+
+# Ana sayfa route'u - Düzeltilmiş versiyon
+def grupla_yatirimlar(yatirimlar, sadece_guncel_fiyatli=False):
+    """Yatirim listesini kod+tip bazinda gruplar ve ozet metrikleri hesaplar."""
+    yatirim_gruplari_liste = {}
+    yatirim_by_id = {y.id: y for y in yatirimlar}
+
     for y in yatirimlar:
+        if sadece_guncel_fiyatli and not (y.guncel_fiyat and y.guncel_fiyat > 0):
+            continue
+
+        key = f"{y.kod}_{y.tip}"
+        if key not in yatirim_gruplari_liste:
+            yatirim_gruplari_liste[key] = {
+                'kod': y.kod,
+                'isim': y.isim,
+                'tip': y.tip,
+                'toplam_maliyet': Decimal('0'),
+                'toplam_guncel_deger': Decimal('0'),
+                'toplam_kar_zarar': Decimal('0'),
+                'ortalama_getiri': 0,
+                'kalemler': [],
+                'kategori': y.kategori
+            }
+
+        maliyet = y.alis_fiyati * y.miktar
         if y.guncel_fiyat and y.guncel_fiyat > 0:
-            key = f"{y.kod}_{y.tip}"
-            if key not in yatirim_gruplari:
-                yatirim_gruplari[key] = {
-                    'kod': y.kod,
-                    'isim': y.isim,
-                    'tip': y.tip,
-                    'toplam_maliyet': Decimal('0'),
-                    'toplam_guncel_deger': Decimal('0'),
-                    'kalemler': []
-                }
-            
-            maliyet = y.alis_fiyati * y.miktar
             guncel_deger_item = y.guncel_fiyat * y.miktar
             kar_zarar_item = guncel_deger_item - maliyet
             getiri = (y.guncel_fiyat / y.alis_fiyati - 1) * 100
-            
-            yatirim_gruplari[key]['toplam_maliyet'] += maliyet
-            yatirim_gruplari[key]['toplam_guncel_deger'] += guncel_deger_item
-            yatirim_gruplari[key]['kalemler'].append({
-                'id': y.id,
-                'alis_tarihi': y.alis_tarihi,
-                'alis_fiyati': float(y.alis_fiyati),
-                'miktar': float(y.miktar),
-                'guncel_fiyat': float(y.guncel_fiyat),
-                'maliyet': float(maliyet),
-                'guncel_deger': float(guncel_deger_item),
-                'kar_zarar': float(kar_zarar_item),
-                'getiri': float(getiri),
-                'kategori': y.kategori,
-                'notlar': y.notlar
-            })
+        else:
+            guncel_deger_item = maliyet
+            kar_zarar_item = Decimal('0')
+            getiri = Decimal('0')
+
+        yatirim_gruplari_liste[key]['toplam_maliyet'] += maliyet
+        yatirim_gruplari_liste[key]['toplam_guncel_deger'] += guncel_deger_item
+        yatirim_gruplari_liste[key]['kalemler'].append({
+            'id': y.id,
+            'alis_tarihi': y.alis_tarihi,
+            'alis_fiyati': float(y.alis_fiyati),
+            'miktar': float(y.miktar),
+            'guncel_fiyat': float(y.guncel_fiyat) if y.guncel_fiyat else None,
+            'maliyet': float(maliyet),
+            'guncel_deger': float(guncel_deger_item),
+            'kar_zarar': float(kar_zarar_item),
+            'getiri': float(getiri),
+            'kategori': y.kategori,
+            'notlar': y.notlar,
+            'son_guncelleme': y.son_guncelleme
+        })
+
+    for grup in yatirim_gruplari_liste.values():
+        grup['toplam_maliyet'] = float(grup['toplam_maliyet'])
+        grup['toplam_guncel_deger'] = float(grup['toplam_guncel_deger'])
+        grup['toplam_kar_zarar'] = grup['toplam_guncel_deger'] - grup['toplam_maliyet']
+        grup['ortalama_getiri'] = (grup['toplam_guncel_deger'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
+        grup['kalem_sayisi'] = len(grup['kalemler'])
+        grup['kalemler'].sort(key=lambda x: x['alis_tarihi'], reverse=True)
+
+        if grup['tip'] in ['altin', 'doviz']:
+            grup['guncel_deger_alis'] = 0
+            grup['guncel_deger_satis'] = 0
+            grup['kar_zarar_alis'] = 0
+            grup['kar_zarar_satis'] = 0
+            grup['getiri_alis'] = 0
+            grup['getiri_satis'] = 0
+
+            for kalem in grup['kalemler']:
+                y_obj = yatirim_by_id.get(kalem['id'])
+                if not y_obj:
+                    continue
+
+                maliyet = kalem['maliyet']
+
+                if y_obj.guncel_alis_fiyat and y_obj.guncel_alis_fiyat > 0:
+                    grup['guncel_deger_alis'] += float(y_obj.guncel_alis_fiyat) * kalem['miktar']
+                elif kalem['guncel_fiyat']:
+                    grup['guncel_deger_alis'] += kalem['guncel_deger']
+                else:
+                    grup['guncel_deger_alis'] += maliyet
+
+                if y_obj.guncel_satis_fiyat and y_obj.guncel_satis_fiyat > 0:
+                    grup['guncel_deger_satis'] += float(y_obj.guncel_satis_fiyat) * kalem['miktar']
+                elif kalem['guncel_fiyat']:
+                    grup['guncel_deger_satis'] += kalem['guncel_deger']
+                else:
+                    grup['guncel_deger_satis'] += maliyet
+
+            grup['kar_zarar_alis'] = grup['guncel_deger_alis'] - grup['toplam_maliyet']
+            grup['kar_zarar_satis'] = grup['guncel_deger_satis'] - grup['toplam_maliyet']
+            grup['getiri_alis'] = (grup['guncel_deger_alis'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
+            grup['getiri_satis'] = (grup['guncel_deger_satis'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
+
+    return list(yatirim_gruplari_liste.values())
+
+
+class YatirimPerformans:
+    def __init__(self, kod, isim, tip, kar_zarar, getiri, kalemler):
+        self.kod = kod
+        self.isim = isim
+        self.tip = tip
+        self.kar_zarar = kar_zarar
+        self.getiri = getiri
+        self.kalemler = kalemler
+        self.kalem_sayisi = len(kalemler)
+
+
+def portfoy_gecmis_grafigi(user_id, gun_sayisi=30):
+    """Kullanicinin son N gunluk portfoy deger gecmisini gercek fiyat verisiyle hesaplar."""
+    baslangic = datetime.now() - timedelta(days=gun_sayisi - 1)
+    yatirimlar = Yatirim.query.filter_by(user_id=user_id).all()
+    if not yatirimlar:
+        return []
+
+    son_fiyatlar = {}
+    for yatirim in yatirimlar:
+        onceki_kayit = (
+            FiyatGecmisi.query
+            .filter(
+                FiyatGecmisi.yatirim_id == yatirim.id,
+                FiyatGecmisi.tarih < baslangic
+            )
+            .order_by(FiyatGecmisi.tarih.desc())
+            .first()
+        )
+        if onceki_kayit and onceki_kayit.fiyat:
+            son_fiyatlar[yatirim.id] = onceki_kayit.fiyat
+        elif yatirim.guncel_fiyat:
+            son_fiyatlar[yatirim.id] = yatirim.guncel_fiyat
+        else:
+            son_fiyatlar[yatirim.id] = yatirim.alis_fiyati
+
+    yatirim_idleri = [y.id for y in yatirimlar]
+    gecmis_kayitlar = (
+        FiyatGecmisi.query
+        .filter(
+            FiyatGecmisi.yatirim_id.in_(yatirim_idleri),
+            FiyatGecmisi.tarih >= baslangic
+        )
+        .order_by(FiyatGecmisi.tarih.asc())
+        .all()
+    )
+
+    gunluk_kayitlar = defaultdict(list)
+    for kayit in gecmis_kayitlar:
+        gunluk_kayitlar[kayit.tarih.date()].append(kayit)
+
+    sonuc = []
+    for i in range(gun_sayisi):
+        gun = (baslangic + timedelta(days=i)).date()
+
+        for kayit in gunluk_kayitlar.get(gun, []):
+            son_fiyatlar[kayit.yatirim_id] = kayit.fiyat
+
+        gunluk_toplam = Decimal('0')
+        for yatirim in yatirimlar:
+            fiyat = son_fiyatlar.get(yatirim.id) or yatirim.guncel_fiyat or yatirim.alis_fiyati
+            gunluk_toplam += Decimal(fiyat) * Decimal(yatirim.miktar)
+
+        sonuc.append((gun.strftime('%Y-%m-%d'), float(gunluk_toplam)))
+
+    return sonuc
+
+
+@app.route('/')
+@login_required
+def index():
+    # Kullanıcının yatırımlarını getir
+    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).order_by(Yatirim.alis_tarihi.desc()).all()
+
+    # Performans grafik dönem seçimi
+    period_map = {
+        '30': ('30 Gün', 30),
+        '60': ('60 Gün', 60),
+        '180': ('6 Ay', 180),
+        '365': ('1 Yıl', 365),
+    }
+    selected_period_key = request.args.get('perf_period', '30')
+    if selected_period_key not in period_map:
+        selected_period_key = '30'
+    selected_period_label, selected_period_days = period_map[selected_period_key]
+    
+    ozet = hesapla_portfoy_ozeti(yatirimlar)
+    toplam_yatirim_float = ozet['toplam_yatirim']
+    guncel_deger_float = ozet['guncel_deger']
+    kar_zarar = ozet['kar_zarar']
+    kar_zarar_yuzde = ozet['kar_zarar_yuzde']
+    kategori_dagilim = ozet['kategori_dagilim']
+    tip_ozet = ozet['tip_ozet']
+    altin_doviz_yatirim_float = ozet['altin_doviz_yatirim']
+    altin_doviz_alis = ozet['altin_doviz_alis']
+    altin_doviz_satis = ozet['altin_doviz_satis']
+        
+    # Performans sıralaması - Gruplu hesaplama
+    yatirim_gruplari = grupla_yatirimlar(yatirimlar, sadece_guncel_fiyatli=True)
 
     
     # Grup performanslarını hesapla
     performans_siralamasi = []
-    for grup in yatirim_gruplari.values():
-        toplam_kar_zarar = float(grup['toplam_guncel_deger'] - grup['toplam_maliyet'])
-        ortalama_getiri = float((grup['toplam_guncel_deger'] / grup['toplam_maliyet'] - 1) * 100) if grup['toplam_maliyet'] > 0 else 0
-        
-        class YatirimPerformans:
-            def __init__(self, kod, isim, tip, kar_zarar, getiri, kalemler):
-                self.kod = kod
-                self.isim = isim
-                self.tip = tip
-                self.kar_zarar = kar_zarar
-                self.getiri = getiri
-                self.kalemler = kalemler
-                self.kalem_sayisi = len(kalemler)
-        
+    for grup in yatirim_gruplari:
+        toplam_kar_zarar = grup['toplam_kar_zarar']
+        ortalama_getiri = grup['ortalama_getiri']
+
         performans_siralamasi.append((0, YatirimPerformans(
             grup['kod'], grup['isim'], grup['tip'], 
             toplam_kar_zarar, ortalama_getiri, grup['kalemler']
@@ -865,98 +1152,46 @@ def index():
             )
             grafik_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
         except Exception as e:
-            print(f"Grafik oluşturma hatası: {e}")
+            app.logger.error(f"Grafik oluşturma hatası: {e}")
     
-    # 30 günlük performans grafiği
+    # Seçili dönem için performans grafiği
     performans_grafik_html = None
     if yatirimlar:
         try:
-            from datetime import datetime, timedelta
-            
-            # Son 30 gün için günlük toplam değer grafiği
-            dates = [(datetime.now() - timedelta(days=30-i)).strftime('%Y-%m-%d') for i in range(30)]
-            values = [guncel_deger_float * (1 + (i-15) * 0.001) for i in range(30)]  # Basit trend
-            
-            fig_perf = go.Figure()
-            fig_perf.add_trace(go.Scatter(
-                x=dates,
-                y=values,
-                mode='lines',
-                name='Portföy Değeri',
-                line=dict(color='#17a2b8', width=3)
-            ))
-            
-            fig_perf.update_layout(
-                title='30 Günlük Portföy Performansı',
-                xaxis_title='Tarih',
-                yaxis_title='Değer (₺)',
-                font=dict(color='white'),
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                height=400
-            )
-            
-            performans_grafik_html = fig_perf.to_html(full_html=False, include_plotlyjs='cdn')
+            gecmis_veri = portfoy_gecmis_grafigi(current_user.id, gun_sayisi=selected_period_days)
+            if gecmis_veri:
+                dates = [item[0] for item in gecmis_veri]
+                values = [item[1] for item in gecmis_veri]
+
+                fig_perf = go.Figure()
+                fig_perf.add_trace(go.Scatter(
+                    x=dates,
+                    y=values,
+                    mode='lines',
+                    name='Portföy Değeri',
+                    line=dict(color='#17a2b8', width=3)
+                ))
+
+                fig_perf.update_layout(
+                    title=f'{selected_period_label} Portföy Performansı',
+                    xaxis_title='Tarih',
+                    yaxis_title='Değer (₺)',
+                    font=dict(color='white'),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    height=400
+                )
+
+                performans_grafik_html = fig_perf.to_html(full_html=False, include_plotlyjs='cdn')
         except Exception as e:
-            print(f"Performans grafiği oluşturma hatası: {e}")
+            app.logger.error(f"Performans grafiği oluşturma hatası: {e}")
     
     # Tüm Yatırımlar için gruplu veri hazırla
-    yatirim_gruplari_liste = {}
-    for y in yatirimlar:
-        key = f"{y.kod}_{y.tip}"
-        if key not in yatirim_gruplari_liste:
-            yatirim_gruplari_liste[key] = {
-                'kod': y.kod,
-                'isim': y.isim,
-                'tip': y.tip,
-                'toplam_maliyet': Decimal('0'),
-                'toplam_guncel_deger': Decimal('0'),
-                'toplam_kar_zarar': Decimal('0'),
-                'ortalama_getiri': 0,
-                'kalemler': [],
-                'kategori': y.kategori  # İlk kalemin kategorisi
-            }
-        
-        maliyet = y.alis_fiyati * y.miktar
-        if y.guncel_fiyat and y.guncel_fiyat > 0:
-            guncel_deger_item = y.guncel_fiyat * y.miktar
-            kar_zarar_item = guncel_deger_item - maliyet
-            getiri = (y.guncel_fiyat / y.alis_fiyati - 1) * 100
-        else:
-            guncel_deger_item = maliyet
-            kar_zarar_item = Decimal('0')
-            getiri = Decimal('0')
-        
-        yatirim_gruplari_liste[key]['toplam_maliyet'] += maliyet
-        yatirim_gruplari_liste[key]['toplam_guncel_deger'] += guncel_deger_item
-        yatirim_gruplari_liste[key]['kalemler'].append({
-            'id': y.id,
-            'alis_tarihi': y.alis_tarihi,
-            'alis_fiyati': float(y.alis_fiyati),
-            'miktar': float(y.miktar),
-            'guncel_fiyat': float(y.guncel_fiyat) if y.guncel_fiyat else None,
-            'maliyet': float(maliyet),
-            'guncel_deger': float(guncel_deger_item),
-            'kar_zarar': float(kar_zarar_item),
-            'getiri': float(getiri),
-            'kategori': y.kategori,
-            'notlar': y.notlar,
-            'son_guncelleme': y.son_guncelleme
-        })
-    
-    # Grup toplamlarını hesapla - Float'a çevir
-    for grup in yatirim_gruplari_liste.values():
-        grup['toplam_maliyet'] = float(grup['toplam_maliyet'])
-        grup['toplam_guncel_deger'] = float(grup['toplam_guncel_deger'])
-        grup['toplam_kar_zarar'] = grup['toplam_guncel_deger'] - grup['toplam_maliyet']
-        grup['ortalama_getiri'] = (grup['toplam_guncel_deger'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
-        grup['kalem_sayisi'] = len(grup['kalemler'])
-        # Kalemler listesini tarihe göre sırala (en yeni önce)
-        grup['kalemler'].sort(key=lambda x: x['alis_tarihi'], reverse=True)
+    yatirim_gruplari_liste = grupla_yatirimlar(yatirimlar)
 
     return render_template('index.html', 
                          yatirimlar=yatirimlar,
-                         yatirim_gruplari=list(yatirim_gruplari_liste.values()),
+                         yatirim_gruplari=yatirim_gruplari_liste,
                          toplam_yatirim=toplam_yatirim_float,
                          guncel_deger=guncel_deger_float,
                          kar_zarar=kar_zarar,
@@ -966,6 +1201,8 @@ def index():
                          kategoriler=kategoriler,
                          grafik_html=grafik_html,
                          performans_grafik_html=performans_grafik_html,
+                         performans_period_key=selected_period_key,
+                         performans_period_label=selected_period_label,
                          altin_doviz_yatirim=altin_doviz_yatirim_float,
                          altin_doviz_alis=altin_doviz_alis,
                          altin_doviz_satis=altin_doviz_satis)
@@ -1002,97 +1239,11 @@ def yatirimlar():
     ).distinct().all()
     kategoriler = [k[0] for k in kategoriler]
     
-    # Yatırımlar için gruplu veri hazırla
-    yatirim_gruplari_liste = {}
-    for y in yatirimlar:
-        key = f"{y.kod}_{y.tip}"
-        if key not in yatirim_gruplari_liste:
-            yatirim_gruplari_liste[key] = {
-                'kod': y.kod,
-                'isim': y.isim,
-                'tip': y.tip,
-                'toplam_maliyet': 0,
-                'toplam_guncel_deger': 0,
-                'toplam_kar_zarar': 0,
-                'ortalama_getiri': 0,
-                'kalemler': [],
-                'kategori': y.kategori
-            }
-        
-        maliyet = float(y.alis_fiyati) * float(y.miktar)
-        if y.guncel_fiyat:
-            guncel_deger = float(y.guncel_fiyat) * float(y.miktar)
-            kar_zarar = guncel_deger - maliyet
-            getiri = (float(y.guncel_fiyat) / float(y.alis_fiyati) - 1) * 100
-        else:
-            guncel_deger = maliyet
-            kar_zarar = 0
-            getiri = 0
-        
-        yatirim_gruplari_liste[key]['toplam_maliyet'] += maliyet
-        yatirim_gruplari_liste[key]['toplam_guncel_deger'] += guncel_deger
-        yatirim_gruplari_liste[key]['kalemler'].append({
-            'id': y.id,
-            'alis_tarihi': y.alis_tarihi,
-            'alis_fiyati': float(y.alis_fiyati),
-            'miktar': float(y.miktar),
-            'guncel_fiyat': float(y.guncel_fiyat) if y.guncel_fiyat else None,
-            'maliyet': maliyet,
-            'guncel_deger': guncel_deger,
-            'kar_zarar': kar_zarar,
-            'getiri': getiri,
-            'kategori': y.kategori,
-            'notlar': y.notlar,
-            'son_guncelleme': y.son_guncelleme
-        })
-    
-    # Grup toplamlarını hesapla
-    for grup in yatirim_gruplari_liste.values():
-        grup['toplam_kar_zarar'] = grup['toplam_guncel_deger'] - grup['toplam_maliyet']
-        grup['ortalama_getiri'] = (grup['toplam_guncel_deger'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
-        grup['kalem_sayisi'] = len(grup['kalemler'])
-        # Kalemler listesini tarihe göre sırala (en yeni önce)
-        grup['kalemler'].sort(key=lambda x: x['alis_tarihi'], reverse=True)
-        
-        # Altın ve Döviz için alış/satış fiyatlarından hesaplamalar ekle
-        if grup['tip'] in ['altin', 'doviz']:
-            grup['guncel_deger_alis'] = 0
-            grup['guncel_deger_satis'] = 0
-            grup['kar_zarar_alis'] = 0
-            grup['kar_zarar_satis'] = 0
-            grup['getiri_alis'] = 0
-            grup['getiri_satis'] = 0
-            
-            for kalem in grup['kalemler']:
-                y_obj = next((y for y in yatirimlar if y.id == kalem['id']), None)
-                if y_obj:
-                    maliyet = kalem['maliyet']
-                    
-                    # Alış fiyatından
-                    if y_obj.guncel_alis_fiyat and y_obj.guncel_alis_fiyat > 0:
-                        grup['guncel_deger_alis'] += float(y_obj.guncel_alis_fiyat) * kalem['miktar']
-                    elif kalem['guncel_fiyat']:
-                        grup['guncel_deger_alis'] += kalem['guncel_deger']
-                    else:
-                        grup['guncel_deger_alis'] += maliyet
-                    
-                    # Satış fiyatından
-                    if y_obj.guncel_satis_fiyat and y_obj.guncel_satis_fiyat > 0:
-                        grup['guncel_deger_satis'] += float(y_obj.guncel_satis_fiyat) * kalem['miktar']
-                    elif kalem['guncel_fiyat']:
-                        grup['guncel_deger_satis'] += kalem['guncel_deger']
-                    else:
-                        grup['guncel_deger_satis'] += maliyet
-            
-            # Kar/Zarar ve Getiri hesapla
-            grup['kar_zarar_alis'] = grup['guncel_deger_alis'] - grup['toplam_maliyet']
-            grup['kar_zarar_satis'] = grup['guncel_deger_satis'] - grup['toplam_maliyet']
-            grup['getiri_alis'] = (grup['guncel_deger_alis'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
-            grup['getiri_satis'] = (grup['guncel_deger_satis'] / grup['toplam_maliyet'] - 1) * 100 if grup['toplam_maliyet'] > 0 else 0
+    yatirim_gruplari_liste = grupla_yatirimlar(yatirimlar)
 
     return render_template('yatirimlar.html', 
                          yatirimlar=yatirimlar,
-                         yatirim_gruplari=list(yatirim_gruplari_liste.values()),
+                         yatirim_gruplari=yatirim_gruplari_liste,
                          search=search,
                          tip_filter=tip_filter,
                          kategori_filter=kategori_filter,
@@ -1238,23 +1389,94 @@ def fiyat_guncelle_route(yatirim_id):
 @login_required
 def toplu_fiyat_guncelle():
     yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
-    
+
+    altin_creds_var = bool(os.environ.get('ALTINKAYNAK_USERNAME') and os.environ.get('ALTINKAYNAK_PASSWORD'))
+
     basarili_count = 0
     hata_count = 0
-    
+    atlanan_altin_count = 0
+
+    # Aynı varlığı (kod+tip) sadece bir kez çekmek için grupla
+    gruplar = {}
     for yatirim in yatirimlar:
-        basarili, _ = fiyat_guncelle(yatirim.id)
-        if basarili:
+        key = f"{yatirim.tip}:{yatirim.kod.upper()}"
+        if key not in gruplar:
+            gruplar[key] = {
+                'tip': yatirim.tip,
+                'kod': yatirim.kod.upper(),
+                'yatirimlar': []
+            }
+        gruplar[key]['yatirimlar'].append(yatirim)
+
+    # Altın credentials yoksa altın gruplarını baştan atla
+    cekilecek_gruplar = []
+    for grup in gruplar.values():
+        if grup['tip'] == 'altin' and not altin_creds_var:
+            atlanan_altin_count += len(grup['yatirimlar'])
+            continue
+        cekilecek_gruplar.append(grup)
+
+    # Dış API çağrılarını paralel yap
+    cekim_sonuclari = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_key = {
+            executor.submit(fiyat_verisi_cek_by_tip_kod, grup['tip'], grup['kod']): f"{grup['tip']}:{grup['kod']}"
+            for grup in cekilecek_gruplar
+        }
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                cekim_sonuclari[key] = future.result()
+            except Exception as e:
+                app.logger.error(f"Paralel fiyat çekme hatası ({key}): {e}", exc_info=True)
+                cekim_sonuclari[key] = (False, None)
+
+    # DB yazımları tek thread'de (SQLAlchemy session güvenliği)
+    for key, grup in gruplar.items():
+        if grup['tip'] == 'altin' and not altin_creds_var:
+            continue
+
+        basarili, veri = cekim_sonuclari.get(key, (False, None))
+        if not basarili or not veri:
+            hata_count += len(grup['yatirimlar'])
+            continue
+
+        for yatirim in grup['yatirimlar']:
+            yatirim.guncel_fiyat = veri['guncel_fiyat']
+            yatirim.son_guncelleme = veri['tarih']
+
+            if yatirim.tip in ['altin', 'doviz']:
+                if veri.get('alis_fiyat'):
+                    yatirim.guncel_alis_fiyat = veri['alis_fiyat']
+                if veri.get('satis_fiyat'):
+                    yatirim.guncel_satis_fiyat = veri['satis_fiyat']
+
+            if not yatirim.isim and veri.get('isim'):
+                yatirim.isim = veri['isim']
+
+            fiyat_gecmisi = FiyatGecmisi(
+                yatirim_id=yatirim.id,
+                tarih=veri['tarih'],
+                fiyat=veri['guncel_fiyat'],
+                user_id=current_user.id
+            )
+            db.session.add(fiyat_gecmisi)
             basarili_count += 1
-        else:
-            hata_count += 1
-    
+
+    db.session.commit()
+
     if basarili_count > 0:
         flash(f'{basarili_count} yatırımın fiyatı güncellendi!', 'success')
-    
+
+    if atlanan_altin_count > 0:
+        flash(
+            f'{atlanan_altin_count} altın yatırımı atlandı (ALTINKAYNAK_USERNAME/ALTINKAYNAK_PASSWORD eksik).',
+            'info'
+        )
+
     if hata_count > 0:
         flash(f'{hata_count} yatırımın fiyatı güncellenemedi!', 'warning')
-    
+
     return redirect(url_for('yatirimlar'))
 
 @app.route('/yatirim_duzenle/<int:yatirim_id>', methods=['POST'])
@@ -1510,82 +1732,15 @@ def export_portfolio_pdf():
         # Kullanıcının yatırımlarını getir
         yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
         
-        # Toplam hesaplamalar
-        toplam_yatirim = Decimal('0')
-        guncel_deger = Decimal('0')
-        
-        for y in yatirimlar:
-            # Maliyet hesaplama
-            maliyet = y.alis_fiyati * y.miktar
-            toplam_yatirim += maliyet
-            
-            # Güncel değer hesaplama
-            if y.guncel_fiyat and y.guncel_fiyat > 0:
-                yatirim_guncel_deger = y.guncel_fiyat * y.miktar
-                guncel_deger += yatirim_guncel_deger
-            else:
-                # Güncel fiyat yoksa maliyet fiyatını kullan
-                guncel_deger += maliyet
-        
-        # Float'a çevir
-        toplam_yatirim_float = float(toplam_yatirim)
-        guncel_deger_float = float(guncel_deger)
-        
-        kar_zarar = guncel_deger_float - toplam_yatirim_float
-        kar_zarar_yuzde = (kar_zarar / toplam_yatirim_float * 100) if toplam_yatirim_float > 0 else 0
-        
-        # Altın ve Döviz için alış/satış fiyatlarından ayrı hesaplamalar
-        altin_doviz_alis = {'guncel_deger': Decimal('0'), 'kar_zarar': Decimal('0'), 'kar_zarar_yuzde': 0}
-        altin_doviz_satis = {'guncel_deger': Decimal('0'), 'kar_zarar': Decimal('0'), 'kar_zarar_yuzde': 0}
-        altin_doviz_yatirim = Decimal('0')
-        
-        for y in yatirimlar:
-            if y.tip in ['altin', 'doviz']:
-                maliyet = y.alis_fiyati * y.miktar
-                altin_doviz_yatirim += maliyet
-                
-                # Alış fiyatından hesaplama
-                if y.guncel_alis_fiyat and y.guncel_alis_fiyat > 0:
-                    altin_doviz_alis['guncel_deger'] += y.guncel_alis_fiyat * y.miktar
-                elif y.guncel_fiyat and y.guncel_fiyat > 0:
-                    altin_doviz_alis['guncel_deger'] += y.guncel_fiyat * y.miktar
-                else:
-                    altin_doviz_alis['guncel_deger'] += maliyet
-                
-                # Satış fiyatından hesaplama
-                if y.guncel_satis_fiyat and y.guncel_satis_fiyat > 0:
-                    altin_doviz_satis['guncel_deger'] += y.guncel_satis_fiyat * y.miktar
-                elif y.guncel_fiyat and y.guncel_fiyat > 0:
-                    altin_doviz_satis['guncel_deger'] += y.guncel_fiyat * y.miktar
-                else:
-                    altin_doviz_satis['guncel_deger'] += maliyet
-        
-        # Float'a çevir ve kar/zarar hesapla
-        if altin_doviz_yatirim > 0:
-            altin_doviz_alis['guncel_deger'] = float(altin_doviz_alis['guncel_deger'])
-            altin_doviz_alis['kar_zarar'] = altin_doviz_alis['guncel_deger'] - float(altin_doviz_yatirim)
-            altin_doviz_alis['kar_zarar_yuzde'] = (altin_doviz_alis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
-            
-            altin_doviz_satis['guncel_deger'] = float(altin_doviz_satis['guncel_deger'])
-            altin_doviz_satis['kar_zarar'] = altin_doviz_satis['guncel_deger'] - float(altin_doviz_yatirim)
-            altin_doviz_satis['kar_zarar_yuzde'] = (altin_doviz_satis['kar_zarar'] / float(altin_doviz_yatirim) * 100)
-        
-        altin_doviz_yatirim_float = float(altin_doviz_yatirim)
-        
-        # Kategoriye göre dağılım
-        kategori_dagilim = {}
-        for y in yatirimlar:
-            kategori = y.kategori or 'Diğer'
-            if kategori not in kategori_dagilim:
-                kategori_dagilim[kategori] = Decimal('0')
-            
-            if y.guncel_fiyat and y.guncel_fiyat > 0:
-                kategori_dagilim[kategori] += y.guncel_fiyat * y.miktar
-            else:
-                kategori_dagilim[kategori] += y.alis_fiyati * y.miktar
-        
-        # Float'a çevir
-        kategori_dagilim = {k: float(v) for k, v in kategori_dagilim.items()}
+        ozet = hesapla_portfoy_ozeti(yatirimlar)
+        toplam_yatirim_float = ozet['toplam_yatirim']
+        guncel_deger_float = ozet['guncel_deger']
+        kar_zarar = ozet['kar_zarar']
+        kar_zarar_yuzde = ozet['kar_zarar_yuzde']
+        kategori_dagilim = ozet['kategori_dagilim']
+        altin_doviz_yatirim_float = ozet['altin_doviz_yatirim']
+        altin_doviz_alis = ozet['altin_doviz_alis']
+        altin_doviz_satis = ozet['altin_doviz_satis']
         
         # HTML içeriği oluştur
         html_content = f"""

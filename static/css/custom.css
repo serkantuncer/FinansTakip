@@ -144,6 +144,17 @@ body {
     color: var(--bs-light);
 }
 
+/* Gold/FX comparison cards */
+.comparison-box {
+    min-height: 100%;
+}
+
+[data-bs-theme="dark"] .comparison-box-total {
+    background-color: #967d00;
+    border: 1px solid #dee2e6;
+    color: #212529;
+}
+
 /* Animation classes */
 .fade-in {
     animation: fadeIn 0.5s ease-in;

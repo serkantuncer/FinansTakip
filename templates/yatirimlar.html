@@ -16,8 +16,9 @@
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#yatirimEkleModal">
                         <i class="fas fa-plus me-2"></i>Yeni Yatırım
                     </button>
-                    <form method="POST" action="{{ url_for('toplu_fiyat_guncelle') }}" class="d-inline">
-                        <button type="submit" class="btn btn-success">
+                    <form method="POST" action="{{ url_for('toplu_fiyat_guncelle') }}" class="d-inline" id="toplu-guncelle-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-success" id="toplu-guncelle-btn" data-loading-text="<i class='fas fa-spinner fa-spin me-2'></i>Güncelleniyor...">
                             <i class="fas fa-sync me-2"></i>Fiyatları Güncelle
                         </button>
                     </form>
@@ -134,6 +135,7 @@
                                             <div class="btn-group" role="group">
                                                 {% if grup.kalem_sayisi == 1 %}
                                                     <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=grup.kalemler[0]['id']) }}" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                         <button type="submit" class="btn btn-outline-success btn-sm" title="Fiyat Güncelle">
                                                             <i class="fas fa-sync"></i>
                                                         </button>
@@ -202,6 +204,7 @@
                                     <div class="btn-group" role="group">
                                         {% if grup.kalem_sayisi == 1 %}
                                             <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=grup.kalemler[0]['id']) }}" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                 <button type="submit" class="btn btn-outline-success btn-sm">
                                                     <i class="fas fa-sync"></i>
                                                 </button>
@@ -254,6 +257,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('yatirim_ekle') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -348,6 +352,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('yatirim_duzenle', yatirim_id=yatirim.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Alış Fiyatı (₺)</label>
@@ -396,6 +401,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
                 <form method="POST" action="{{ url_for('yatirim_sil', yatirim_id=yatirim.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger">
                         <i class="fas fa-trash me-2"></i>Sil
                     </button>
@@ -438,6 +444,11 @@
 <script>
 // Global variable to store investment groups data
 let yatirimGroupsData = {};
+
+function csrfTokenAl() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     // Load investment groups data from JSON script tag
@@ -1476,6 +1487,7 @@ function validateCode() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'X-CSRFToken': csrfTokenAl()
         },
         body: JSON.stringify({
             tip: tip,
@@ -1833,7 +1845,8 @@ function updatePriceAjax(yatirimId) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrfTokenAl()
         }
     })
     .then(response => {

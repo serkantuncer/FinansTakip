@@ -23,7 +23,7 @@ class User(UserMixin, db.Model):
 class Yatirim(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tip = db.Column(db.String(20), nullable=False)  # 'fon', 'hisse', 'altin', 'doviz'
-    kod = db.Column(db.String(30), nullable=False)  # Yatırım kodu (USDTRY, XU100, vb.)
+    kod = db.Column(db.String(30), nullable=False, index=True)  # Yatırım kodu (USDTRY, XU100, vb.)
     isim = db.Column(db.String(100))
     alis_tarihi = db.Column(db.DateTime, nullable=False)
     alis_fiyati = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
@@ -36,7 +36,7 @@ class Yatirim(db.Model):
     kategori = db.Column(db.String(30))  # Opsiyonel kategori alanı
     
     # Foreign key to User
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Nullable for migration
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     
     def __repr__(self):
         return f'<Yatirim {self.tip} {self.kod}>'
@@ -62,8 +62,8 @@ class Yatirim(db.Model):
 
 class FiyatGecmisi(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    yatirim_id = db.Column(db.Integer, db.ForeignKey('yatirim.id'), nullable=False)
-    tarih = db.Column(db.DateTime, nullable=False)
+    yatirim_id = db.Column(db.Integer, db.ForeignKey('yatirim.id'), nullable=False, index=True)
+    tarih = db.Column(db.DateTime, nullable=False, index=True)
     fiyat = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
     
     # Foreign key to User

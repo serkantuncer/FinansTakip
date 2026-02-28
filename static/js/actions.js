@@ -1,3 +1,15 @@
+// CSRF yardımcı fonksiyonları
+
+function getCsrfToken() {
+    const tokenInput = document.querySelector('input[name="csrf_token"]');
+    if (tokenInput && tokenInput.value) {
+        return tokenInput.value;
+    }
+
+    const metaToken = document.querySelector('meta[name="csrf-token"]');
+    return metaToken ? metaToken.getAttribute('content') : '';
+}
+
 // Investment Tracker Actions JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -42,13 +54,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Loading state for bulk price update
-    const bulkUpdateForm = document.querySelector('form[action*="toplu_fiyat_guncelle"]');
+    const bulkUpdateForm = document.getElementById('toplu-guncelle-form') || document.querySelector('form[action*="toplu_fiyat_guncelle"]');
     if (bulkUpdateForm) {
         bulkUpdateForm.addEventListener('submit', function() {
-            const button = this.querySelector('button[type="submit"]');
+            const button = document.getElementById('toplu-guncelle-btn') || this.querySelector('button[type="submit"]');
             if (button) {
                 button.disabled = true;
-                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Güncelleniyor...';
+                button.innerHTML = button.getAttribute('data-loading-text') || '<i class="fas fa-spinner fa-spin me-2"></i>Güncelleniyor...';
             }
         });
     }
@@ -153,5 +165,6 @@ function formatPercentage(percentage) {
 // Export functions for global use
 window.InvestmentTracker = {
     formatCurrency: formatCurrency,
-    formatPercentage: formatPercentage
+    formatPercentage: formatPercentage,
+    getCsrfToken: getCsrfToken
 };

@@ -1,9 +1,10 @@
 // Search and Filter JavaScript for Investment Tracker
 
 document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('searchForm');
     // Real-time search functionality
-    const searchInput = document.querySelector('input[name="search"]');
-    const tableRows = document.querySelectorAll('tbody tr');
+    const searchInput = document.getElementById('search-input') || (searchForm ? searchForm.querySelector('input[name="search"]') : null);
+    const tableRows = document.querySelectorAll('.table-responsive tbody tr');
     
     if (searchInput && tableRows.length > 0) {
         searchInput.addEventListener('input', function() {
@@ -21,8 +22,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Filter change handlers
-    const tipFilter = document.querySelector('select[name="tip"]');
-    const kategoriFilter = document.querySelector('select[name="kategori"]');
+    const tipFilter = document.getElementById('tip-filter') || (searchForm ? searchForm.querySelector('select[name="tip"]') : null);
+    const kategoriFilter = document.getElementById('kategori-filter') || (searchForm ? searchForm.querySelector('select[name="kategori"]') : null);
     
     if (tipFilter) {
         tipFilter.addEventListener('change', function() {
@@ -216,16 +217,18 @@ window.SearchUtils = {
     applyFilters: function() {
         // Trigger filter application
         const event = new Event('input');
-        const searchInput = document.querySelector('input[name="search"]');
+        const searchForm = document.getElementById('searchForm');
+        const searchInput = document.getElementById('search-input') || (searchForm ? searchForm.querySelector('input[name="search"]') : null);
         if (searchInput) {
             searchInput.dispatchEvent(event);
         }
     },
     
     clearFilters: function() {
-        const searchInput = document.querySelector('input[name="search"]');
-        const tipFilter = document.querySelector('select[name="tip"]');
-        const kategoriFilter = document.querySelector('select[name="kategori"]');
+        const searchForm = document.getElementById('searchForm');
+        const searchInput = document.getElementById('search-input') || (searchForm ? searchForm.querySelector('input[name="search"]') : null);
+        const tipFilter = document.getElementById('tip-filter') || (searchForm ? searchForm.querySelector('select[name="tip"]') : null);
+        const kategoriFilter = document.getElementById('kategori-filter') || (searchForm ? searchForm.querySelector('select[name="kategori"]') : null);
         
         if (searchInput) searchInput.value = '';
         if (tipFilter) tipFilter.value = '';
