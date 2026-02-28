@@ -386,6 +386,109 @@ def tefas_fon_verisi_cek(fon_kodu):
         # Try alternative TEFAS search as fallback
         return tefas_alternatif_arama(fon_kodu_upper)
 
+
+# Fon türü -> stopaj grubu eşleştirme tablosu
+FONTURKOD_STOPAJ_GRUBU = {
+    # GRUP A — Hisse Yoğun
+    'HIS': 'A', 'HSY': 'A', 'BYF-HIS': 'A',
+    # GRUP B — TL Standart
+    'PAR': 'B', 'BOR': 'B', 'KAT': 'B',
+    'MAD': 'B', 'SEP': 'B', 'FON': 'B',
+    # GRUP C — Dövizli / Değişken / Diğer
+    'DEG': 'C', 'KAR': 'C', 'SER': 'C',
+    'DOV': 'C', 'DYB': 'C', 'YAB': 'C', 'EUR': 'C',
+    # GRUP D — GSYF & GYF
+    'GYF': 'D', 'GSY': 'D',
+}
+
+# Fon unvanından stopaj grubu tahmin tablosu (fallback)
+FON_UNVAN_STOPAJ_GRUBU = [
+    (['HİSSE SENEDİ YOĞUN', 'HSYF'], 'A'),
+    (['PARA PİYASASI', 'BORÇLANMA ARAÇLARI', 'KIYMETLİ MADEN', 'KATILIM'], 'B'),
+    (['DÖVİZ', 'EUROBOND', 'DIŞ BORÇLANMA', 'YABANCI', 'DEĞİŞKEN', 'KARMA', 'SERBEST'], 'C'),
+    (['GAYRİMENKUL YATIRIM FONU', 'GİRİŞİM SERMAYESİ'], 'D'),
+]
+
+
+def fon_bilgisi_cek(fon_kodu):
+    """
+    TEFAS'tan fon tipi, semsiye fon türü ve kurucu bilgilerini çeker.
+    Fiyat bilgisi bu fonksiyonda çekilmez.
+    """
+    fon_kodu_upper = fon_kodu.upper()
+    app.logger.info(f"Fon bilgisi çekiliyor: {fon_kodu_upper}")
+
+    api_url = (
+        f"https://www.tefas.gov.tr/api/DB/BindHistoryInfo"
+        f"?fontip=YAT&sfontur=&kurucukod=&fonkod={fon_kodu_upper}&bastarih=&bittarih="
+    )
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'application/json',
+        'Referer': 'https://www.tefas.gov.tr/'
+    }
+
+    try:
+        response = http_session.get(api_url, headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                kayit = data[0]
+                fon_tur_kodu = kayit.get('FONTURKOD') or kayit.get('SFONTUR', '')
+                semsiye_turu = kayit.get('FONTUR', '')
+                unvan_tipi = kayit.get('FONUNVANTIP') or kayit.get('FONUNVAN', '')
+                kurucu_kodu = kayit.get('KURUCUKOD', '')
+
+                fon_grubu = FONTURKOD_STOPAJ_GRUBU.get(fon_tur_kodu.upper() if fon_tur_kodu else '')
+                otomatik = fon_grubu is not None
+
+                if not fon_grubu and unvan_tipi:
+                    unvan_upper = unvan_tipi.upper()
+                    for anahtar_kelimeler, grup in FON_UNVAN_STOPAJ_GRUBU:
+                        if any(k in unvan_upper for k in anahtar_kelimeler):
+                            fon_grubu = grup
+                            break
+
+                app.logger.info(
+                    f"Fon bilgisi çekildi: {fon_kodu_upper} | "
+                    f"TürKod={fon_tur_kodu} | Grup={fon_grubu} | Otomatik={otomatik}"
+                )
+                return {
+                    'fon_tur_kodu': fon_tur_kodu,
+                    'semsiye_fon_turu': semsiye_turu,
+                    'fon_unvan_tipi': unvan_tipi,
+                    'kurucu_kodu': kurucu_kodu,
+                    'fon_grubu': fon_grubu,
+                    'fon_grubu_otomatik': otomatik,
+                }
+
+        app.logger.warning(f"TEFAS fon bilgisi API yanıt vermedi: {fon_kodu_upper}")
+        return None
+    except Exception as e:
+        app.logger.error(f"Fon bilgisi çekme hatası ({fon_kodu_upper}): {e}")
+        return None
+
+
+def fon_bilgisi_yatirima_kaydet(yatirim):
+    """
+    Bir Yatirim objesinin fon bilgilerini TEFAS'tan çekip DB'ye kaydeder.
+    """
+    if yatirim.tip != 'fon':
+        return False
+
+    bilgi = fon_bilgisi_cek(yatirim.kod)
+    if bilgi:
+        yatirim.fon_tur_kodu = bilgi['fon_tur_kodu']
+        yatirim.semsiye_fon_turu = bilgi['semsiye_fon_turu']
+        yatirim.fon_unvan_tipi = bilgi['fon_unvan_tipi']
+        yatirim.kurucu_kodu = bilgi['kurucu_kodu']
+        yatirim.fon_grubu = bilgi['fon_grubu']
+        yatirim.fon_grubu_otomatik = bilgi['fon_grubu_otomatik']
+        yatirim.fon_bilgi_guncelleme = datetime.now()
+        db.session.commit()
+        return True
+    return False
+
 def tefas_alternatif_arama(fon_kodu):
     """TEFAŞ alternatif API kullanarak fon arama"""
     fon_kodu_upper = fon_kodu.upper()
