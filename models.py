@@ -60,6 +60,24 @@ class Yatirim(db.Model):
             'kar_zarar_yuzde': float((self.guncel_fiyat / self.alis_fiyati - 1) * 100) if self.guncel_fiyat else None
         }
 
+
+class StopajOrani(db.Model):
+    """
+    Fon grubuna ve alış tarihine göre stopaj oranlarını tutar.
+    Yeni mevzuat değişikliklerinde yalnızca bu tabloya satır eklenir.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    fon_grubu = db.Column(db.String(1), nullable=False)  # 'A', 'B', 'C', 'D'
+    donem_baslangic = db.Column(db.Date, nullable=False)  # Bu tarih ve sonrasında alınanlar
+    donem_bitis = db.Column(db.Date, nullable=True)  # None = hâlâ geçerli
+    elde_tutma_gun = db.Column(db.Integer, nullable=True)  # None = süre şartı yok
+    oran = db.Column(db.Numeric(5, 2), nullable=False)  # Yüzde olarak: 17.50, 10.00, 0.00
+    aciklama = db.Column(db.String(200))  # İsteğe bağlı not
+
+    def __repr__(self):
+        return f'<StopajOrani Grup:{self.fon_grubu} {self.donem_baslangic} %{self.oran}>'
+
+
 class FiyatGecmisi(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     yatirim_id = db.Column(db.Integer, db.ForeignKey('yatirim.id'), nullable=False, index=True)
