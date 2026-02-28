@@ -156,6 +156,7 @@ def init_database():
             # Check if we need to migrate existing data
             migrate_existing_data()
             stopaj_seed_data()
+            migrate_fon_bilgileri()
             
         except Exception as e:
             app.logger.error(f"Veritabanı başlatma hatası: {e}")
@@ -192,6 +193,45 @@ def stopaj_seed_data():
         db.session.add(oran)
     db.session.commit()
     app.logger.info("Stopaj oranları seed data yüklendi.")
+
+
+def migrate_fon_bilgileri():
+    """
+    Daha önce eklenmiş fonlar için fon bilgilerini TEFAS'tan çeker.
+    fon_bilgi_guncelleme alanı NULL olan fonları günceller.
+    """
+    try:
+        guncellenmemis_fonlar = Yatirim.query.filter(
+            Yatirim.tip == 'fon',
+            Yatirim.fon_bilgi_guncelleme.is_(None)
+        ).all()
+
+        if not guncellenmemis_fonlar:
+            return
+
+        app.logger.info(f"{len(guncellenmemis_fonlar)} fon için bilgi güncelleme başlatılıyor...")
+
+        islenmis_kodlar = {}
+        for yatirim in guncellenmemis_fonlar:
+            kod = (yatirim.kod or "").upper()
+
+            if kod not in islenmis_kodlar:
+                islenmis_kodlar[kod] = fon_bilgisi_cek(kod)
+
+            bilgi = islenmis_kodlar[kod]
+            if bilgi:
+                yatirim.fon_tur_kodu = bilgi['fon_tur_kodu']
+                yatirim.semsiye_fon_turu = bilgi['semsiye_fon_turu']
+                yatirim.fon_unvan_tipi = bilgi['fon_unvan_tipi']
+                yatirim.kurucu_kodu = bilgi['kurucu_kodu']
+                yatirim.fon_grubu = bilgi['fon_grubu']
+                yatirim.fon_grubu_otomatik = bilgi['fon_grubu_otomatik']
+                yatirim.fon_bilgi_guncelleme = datetime.now()
+
+        db.session.commit()
+        app.logger.info("Fon bilgisi migrasyonu tamamlandı.")
+    except Exception as e:
+        app.logger.error(f"Fon bilgisi migrasyon hatası: {e}")
 
 def migrate_existing_data():
     """Mevcut verileri user_id olmadan oluşturulmuş tablolardan yeni yapıya taşır."""
