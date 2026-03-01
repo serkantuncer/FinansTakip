@@ -604,6 +604,24 @@ def stopaj_orani_bul(fon_grubu, alis_tarihi, satis_tarihi=None):
     return None
 
 
+def stopaj_orani_donem_cakisiyor(fon_grubu, donem_baslangic, donem_bitis=None, elde_tutma_gun=None):
+    """
+    Aynı fon_grubu + elde_tutma_gun kombinasyonu için dönem çakışmasını kontrol eder.
+    """
+    adaylar = StopajOrani.query.filter(
+        StopajOrani.fon_grubu == fon_grubu,
+        StopajOrani.elde_tutma_gun.is_(elde_tutma_gun) if elde_tutma_gun is None else StopajOrani.elde_tutma_gun == elde_tutma_gun
+    ).all()
+
+    yeni_bitis = donem_bitis or date.max
+    for aday in adaylar:
+        aday_bitis = aday.donem_bitis or date.max
+        # [a,b] ve [c,d] aralıkları çakışıyorsa: a<=d and c<=b
+        if donem_baslangic <= aday_bitis and aday.donem_baslangic <= yeni_bitis:
+            return aday
+    return None
+
+
 def yatirim_icin_satis_fiyati_cek(yatirim):
     """Simulasyon icin yatirimin anlik satis fiyatini kaynaktan ceker."""
     basarili, veri = fiyat_verisi_cek_by_tip_kod(yatirim.tip, yatirim.kod)
@@ -1630,12 +1648,38 @@ def stopaj_oranlari():
                 flash('Geçersiz fon grubu seçimi.', 'danger')
                 return redirect(url_for('stopaj_oranlari'))
 
+            if not donem_baslangic_str:
+                flash('Dönem başlangıç tarihi zorunludur.', 'danger')
+                return redirect(url_for('stopaj_oranlari'))
+
+            donem_baslangic = datetime.strptime(donem_baslangic_str, '%Y-%m-%d').date()
+            donem_bitis = datetime.strptime(donem_bitis_str, '%Y-%m-%d').date() if donem_bitis_str else None
+            elde_tutma_gun = int(elde_tutma_gun_str) if elde_tutma_gun_str else None
+            oran = Decimal(str(oran_str))
+
+            if donem_bitis and donem_bitis < donem_baslangic:
+                flash('Dönem bitiş tarihi, başlangıç tarihinden küçük olamaz.', 'danger')
+                return redirect(url_for('stopaj_oranlari'))
+
+            cakisan = stopaj_orani_donem_cakisiyor(
+                fon_grubu=fon_grubu,
+                donem_baslangic=donem_baslangic,
+                donem_bitis=donem_bitis,
+                elde_tutma_gun=elde_tutma_gun
+            )
+            if cakisan:
+                flash(
+                    f'Çakışan dönem mevcut (ID:{cakisan.id} | {cakisan.donem_baslangic} - {cakisan.donem_bitis or "Açık Uçlu"}).',
+                    'danger'
+                )
+                return redirect(url_for('stopaj_oranlari'))
+
             yeni_oran = StopajOrani(
                 fon_grubu=fon_grubu,
-                donem_baslangic=datetime.strptime(donem_baslangic_str, '%Y-%m-%d').date(),
-                donem_bitis=datetime.strptime(donem_bitis_str, '%Y-%m-%d').date() if donem_bitis_str else None,
-                elde_tutma_gun=int(elde_tutma_gun_str) if elde_tutma_gun_str else None,
-                oran=Decimal(str(oran_str)),
+                donem_baslangic=donem_baslangic,
+                donem_bitis=donem_bitis,
+                elde_tutma_gun=elde_tutma_gun,
+                oran=oran,
                 aciklama=aciklama
             )
             db.session.add(yeni_oran)
@@ -2073,8 +2117,15 @@ def stopaj_simulasyon(yatirim_id):
     satis_fiyati_str = data.get('satis_fiyati')
     satis_tarihi_str = data.get('satis_tarihi')
 
-    satis_fiyati = Decimal(satis_fiyati_str) if satis_fiyati_str else None
-    satis_tarihi = datetime.strptime(satis_tarihi_str, '%Y-%m-%d') if satis_tarihi_str else None
+    try:
+        satis_fiyati = Decimal(satis_fiyati_str) if satis_fiyati_str else None
+    except Exception:
+        return jsonify({'success': False, 'error': 'Geçersiz satış fiyatı'}), 400
+
+    try:
+        satis_tarihi = datetime.strptime(satis_tarihi_str, '%Y-%m-%d') if satis_tarihi_str else None
+    except Exception:
+        return jsonify({'success': False, 'error': 'Geçersiz satış tarihi formatı'}), 400
     fiyat_kaynagi = 'manuel'
 
     if satis_fiyati is None:
@@ -2114,12 +2165,41 @@ def stopaj_orani_ekle():
     data = request.get_json() or {}
 
     try:
+        fon_grubu = (data.get('fon_grubu') or '').strip().upper()
+        if fon_grubu not in ['A', 'B', 'C', 'D']:
+            return jsonify({'success': False, 'error': 'Geçersiz fon grubu'}), 400
+
+        donem_baslangic_raw = data.get('donem_baslangic')
+        if not donem_baslangic_raw:
+            return jsonify({'success': False, 'error': 'Dönem başlangıç zorunludur'}), 400
+
+        donem_baslangic = datetime.strptime(donem_baslangic_raw, '%Y-%m-%d').date()
+        donem_bitis = datetime.strptime(data['donem_bitis'], '%Y-%m-%d').date() if data.get('donem_bitis') else None
+        elde_tutma_gun = data.get('elde_tutma_gun')
+        elde_tutma_gun = int(elde_tutma_gun) if elde_tutma_gun not in [None, ''] else None
+        oran = Decimal(str(data['oran']))
+
+        if donem_bitis and donem_bitis < donem_baslangic:
+            return jsonify({'success': False, 'error': 'Dönem bitiş başlangıçtan küçük olamaz'}), 400
+
+        cakisan = stopaj_orani_donem_cakisiyor(
+            fon_grubu=fon_grubu,
+            donem_baslangic=donem_baslangic,
+            donem_bitis=donem_bitis,
+            elde_tutma_gun=elde_tutma_gun
+        )
+        if cakisan:
+            return jsonify({
+                'success': False,
+                'error': f'Çakışan dönem mevcut (ID:{cakisan.id})'
+            }), 400
+
         yeni_oran = StopajOrani(
-            fon_grubu=data['fon_grubu'],
-            donem_baslangic=datetime.strptime(data['donem_baslangic'], '%Y-%m-%d').date(),
-            donem_bitis=datetime.strptime(data['donem_bitis'], '%Y-%m-%d').date() if data.get('donem_bitis') else None,
-            elde_tutma_gun=data.get('elde_tutma_gun'),
-            oran=Decimal(str(data['oran'])),
+            fon_grubu=fon_grubu,
+            donem_baslangic=donem_baslangic,
+            donem_bitis=donem_bitis,
+            elde_tutma_gun=elde_tutma_gun,
+            oran=oran,
             aciklama=data.get('aciklama', '')
         )
         db.session.add(yeni_oran)
