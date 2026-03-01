@@ -675,6 +675,154 @@ def stopaj_hesapla(yatirim, satis_tarihi=None, satis_fiyati=None):
     }
 
 
+def fifo_alis_fiyati_bul(yatirim_id, satilan_miktar):
+    """
+    FIFO mantığıyla satılacak miktara karşılık gelen ağırlıklı ortalama alış fiyatını bulur.
+    """
+    yatirim = Yatirim.query.get(yatirim_id)
+    if not yatirim:
+        return None
+
+    alis_kayitlari = Yatirim.query.filter_by(
+        user_id=yatirim.user_id,
+        kod=yatirim.kod,
+        tip=yatirim.tip,
+        durum='aktif'
+    ).order_by(Yatirim.alis_tarihi.asc()).all()
+
+    toplam_bakiye = sum((k.miktar or Decimal('0')) for k in alis_kayitlari)
+    if toplam_bakiye < satilan_miktar:
+        return None
+
+    kalan_satis = satilan_miktar
+    toplam_maliyet = Decimal('0')
+    kullanilan = []
+
+    for kayit in alis_kayitlari:
+        if kalan_satis <= 0:
+            break
+        kayit_miktar = kayit.miktar or Decimal('0')
+        kullanilan_miktar = min(kayit_miktar, kalan_satis)
+        toplam_maliyet += kayit.alis_fiyati * kullanilan_miktar
+        kullanilan.append({
+            'id': kayit.id,
+            'alis_tarihi': kayit.alis_tarihi,
+            'alis_fiyati': float(kayit.alis_fiyati),
+            'kullanilan_miktar': float(kullanilan_miktar)
+        })
+        kalan_satis -= kullanilan_miktar
+
+    alis_fiyati_baz = toplam_maliyet / satilan_miktar
+    return {
+        'alis_fiyati_baz': alis_fiyati_baz,
+        'kullanilan_kayitlar': kullanilan
+    }
+
+
+def satis_hesapla(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
+                  komisyon=None, diger_masraf=None, stopaj_manuel=None):
+    """
+    Satış işleminin tüm mali sonuçlarını hesaplar. DB'ye yazmaz.
+    """
+    if satilan_miktar <= 0 or satis_fiyati <= 0:
+        return {'hata': 'Geçersiz miktar veya fiyat'}
+
+    if satilan_miktar > yatirim.miktar:
+        return {'hata': f'Yetersiz bakiye. Mevcut: {yatirim.miktar}'}
+
+    komisyon = Decimal(str(komisyon or 0))
+    diger_masraf = Decimal(str(diger_masraf or 0))
+
+    fifo = fifo_alis_fiyati_bul(yatirim.id, satilan_miktar)
+    alis_fiyati_baz = fifo['alis_fiyati_baz'] if fifo else yatirim.alis_fiyati
+
+    satis_tutari = satis_fiyati * satilan_miktar
+    alis_tutari = alis_fiyati_baz * satilan_miktar
+    brut_kar = satis_tutari - alis_tutari
+
+    stopaj_orani = Decimal('0')
+    stopaj_tutari = Decimal('0')
+
+    if stopaj_manuel is not None:
+        stopaj_tutari = Decimal(str(stopaj_manuel))
+        stopaj_orani = (stopaj_tutari / brut_kar * 100) if brut_kar > 0 else Decimal('0')
+    elif yatirim.tip == 'fon' and yatirim.fon_grubu:
+        oran = stopaj_orani_bul(yatirim.fon_grubu, yatirim.alis_tarihi, satis_tarihi)
+        if oran and brut_kar > 0:
+            stopaj_orani = oran
+            stopaj_tutari = brut_kar * oran / 100
+
+    toplam_masraf = komisyon + diger_masraf + stopaj_tutari
+    net_kar = brut_kar - toplam_masraf
+    kalan_miktar = yatirim.miktar - satilan_miktar
+
+    return {
+        'alis_fiyati_baz': alis_fiyati_baz,
+        'satis_tutari': satis_tutari,
+        'alis_tutari': alis_tutari,
+        'brut_kar': brut_kar,
+        'stopaj_orani': stopaj_orani,
+        'stopaj_tutari': stopaj_tutari,
+        'komisyon': komisyon,
+        'diger_masraf': diger_masraf,
+        'toplam_masraf': toplam_masraf,
+        'net_kar': net_kar,
+        'kalan_miktar': kalan_miktar,
+        'tam_satis_mi': kalan_miktar == 0,
+        'fifo_detay': fifo['kullanilan_kayitlar'] if fifo else [],
+    }
+
+
+def satis_kaydet(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
+                 komisyon=0, diger_masraf=0, diger_masraf_aciklama='',
+                 stopaj_tutari=0, stopaj_orani=0, stopaj_manuel_mi=False,
+                 notlar='', fifo_mi=True):
+    """
+    Satış işlemini DB'ye kaydeder ve yatırım bakiyesini günceller.
+    """
+    try:
+        hesap = satis_hesapla(
+            yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
+            komisyon, diger_masraf,
+            stopaj_manuel=stopaj_tutari if stopaj_manuel_mi else None
+        )
+
+        if 'hata' in hesap:
+            return False, hesap['hata']
+
+        satis = SatisIslemi(
+            yatirim_id=yatirim.id,
+            user_id=yatirim.user_id,
+            satis_tarihi=satis_tarihi,
+            satis_fiyati=satis_fiyati,
+            satilan_miktar=satilan_miktar,
+            alis_fiyati_baz=hesap['alis_fiyati_baz'],
+            fifo_mi=fifo_mi,
+            komisyon=komisyon,
+            diger_masraf=diger_masraf,
+            diger_masraf_aciklama=diger_masraf_aciklama,
+            stopaj_orani=hesap['stopaj_orani'],
+            stopaj_tutari=hesap['stopaj_tutari'],
+            stopaj_manuel_mi=stopaj_manuel_mi,
+            brut_kar=hesap['brut_kar'],
+            net_kar=hesap['net_kar'],
+            notlar=notlar,
+        )
+        db.session.add(satis)
+
+        yatirim.miktar = hesap['kalan_miktar']
+        if hesap['tam_satis_mi']:
+            yatirim.durum = 'tamamen_satildi'
+
+        db.session.commit()
+        return True, satis
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Satış kaydetme hatası: {e}", exc_info=True)
+        return False, str(e)
+
+
 # Uygulama başladığında veritabanını kontrol et
 try:
     init_database()
