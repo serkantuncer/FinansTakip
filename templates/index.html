@@ -100,7 +100,7 @@
                     <div class="row align-items-stretch">
                         {% if altin_ozet.yatirim > 0 %}
                         <div class="col-lg-6 mb-3">
-                            <div class="comparison-box p-3 rounded border border-warning-subtle h-100">
+                            <div class="comparison-box p-3 rounded border border-warning-subtle h-100" style="overflow-wrap: anywhere;">
                                 <h6 class="mb-3 text-warning-emphasis">
                                     <i class="fas fa-coins me-1"></i>Altın
                                 </h6>
@@ -136,7 +136,7 @@
                         {% endif %}
                         {% if doviz_ozet.yatirim > 0 %}
                         <div class="col-lg-6 mb-3">
-                            <div class="comparison-box p-3 rounded border border-info-subtle h-100">
+                            <div class="comparison-box p-3 rounded border border-info-subtle h-100" style="overflow-wrap: anywhere;">
                                 <h6 class="mb-3 text-info-emphasis">
                                     <i class="fas fa-dollar-sign me-1"></i>Döviz
                                 </h6>
@@ -191,19 +191,19 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-lg-4">
-                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important;">
+                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important; overflow-wrap: anywhere;">
                                 <div class="small fw-semibold" style="color: #4b5563;">Stopajsız Toplam Fon Değeri</div>
                                 <div class="h5 mb-0 fw-bold" style="color: #111827;">₺{{ "{:,.2f}".format(fon_ozet.stopajsiz_toplam_deger) }}</div>
                             </div>
                         </div>
                         <div class="col-lg-4">
-                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important;">
+                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important; overflow-wrap: anywhere;">
                                 <div class="small fw-semibold" style="color: #4b5563;">Toplam Stopaj Yükü</div>
                                 <div class="h5 mb-0 fw-bold" style="color: #111827;">₺{{ "{:,.2f}".format(fon_ozet.toplam_stopaj_yuku) }}</div>
                             </div>
                         </div>
                         <div class="col-lg-4">
-                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important;">
+                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important; overflow-wrap: anywhere;">
                                 <div class="small fw-semibold" style="color: #4b5563;">Stopajlı Net Fon Değeri</div>
                                 <div class="h5 mb-0 fw-bold" style="color: #111827;">₺{{ "{:,.2f}".format(fon_ozet.stopajli_net_deger) }}</div>
                             </div>

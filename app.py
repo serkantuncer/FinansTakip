@@ -2366,6 +2366,8 @@ def export_portfolio_pdf():
                     border-radius: 8px;
                     margin-bottom: 30px;
                     border-left: 4px solid #007bff;
+                    page-break-inside: avoid;
+                    break-inside: avoid-page;
                 }}
                 .summary h3 {{
                     color: #007bff;
@@ -2407,11 +2409,14 @@ def export_portfolio_pdf():
                     border-collapse: collapse;
                     margin-top: 20px;
                     font-size: 10px;
+                    table-layout: fixed;
                 }}
                 th, td {{
                     border: 1px solid #dee2e6;
                     padding: 6px;
                     text-align: left;
+                    word-break: break-word;
+                    overflow-wrap: anywhere;
                 }}
                 th {{
                     background-color: #007bff;
