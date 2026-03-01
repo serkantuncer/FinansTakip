@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Stopaj Oranları - Financial Portal{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h1 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Stopaj Oranları</h1>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">Yeni Dönem Ekle</div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('stopaj_oranlari') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label class="form-label">Fon Grubu</label>
+                            <select class="form-select" name="fon_grubu" required>
+                                <option value="">Seçiniz</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="C">C</option>
+                                <option value="D">D</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Dönem Başlangıç</label>
+                            <input type="date" class="form-control" name="donem_baslangic" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Dönem Bitiş (opsiyonel)</label>
+                            <input type="date" class="form-control" name="donem_bitis">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Elde Tutma Gün (opsiyonel)</label>
+                            <input type="number" class="form-control" name="elde_tutma_gun" min="1">
+                            <small class="text-muted">Boş = süre şartı yok</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Oran (%)</label>
+                            <input type="number" class="form-control" name="oran" step="0.01" min="0" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Açıklama</label>
+                            <input type="text" class="form-control" name="aciklama" maxlength="200">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-1"></i>Ekle
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header">Tanımlı Oranlar</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Grup</th>
+                                    <th>Başlangıç</th>
+                                    <th>Bitiş</th>
+                                    <th>Elde Tutma Gün</th>
+                                    <th>Oran</th>
+                                    <th>Açıklama</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for o in oranlar %}
+                                <tr>
+                                    <td><span class="badge bg-secondary">{{ o.fon_grubu }}</span></td>
+                                    <td>{{ o.donem_baslangic.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ o.donem_bitis.strftime('%Y-%m-%d') if o.donem_bitis else '-' }}</td>
+                                    <td>{{ o.elde_tutma_gun if o.elde_tutma_gun is not none else '-' }}</td>
+                                    <td>%{{ "{:.2f}".format(o.oran) }}</td>
+                                    <td>{{ o.aciklama or '-' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-3">Kayıt yok</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

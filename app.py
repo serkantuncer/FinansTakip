@@ -1562,6 +1562,48 @@ def stopaj_sayfasi():
     )
 
 
+@app.route('/stopaj_oranlari', methods=['GET', 'POST'])
+@login_required
+def stopaj_oranlari():
+    """Stopaj oranlarini listeleme ve yeni donem ekleme sayfasi."""
+    if request.method == 'POST':
+        try:
+            fon_grubu = (request.form.get('fon_grubu') or '').strip().upper()
+            donem_baslangic_str = request.form.get('donem_baslangic')
+            donem_bitis_str = request.form.get('donem_bitis')
+            elde_tutma_gun_str = request.form.get('elde_tutma_gun')
+            oran_str = request.form.get('oran')
+            aciklama = request.form.get('aciklama', '').strip()
+
+            if fon_grubu not in ['A', 'B', 'C', 'D']:
+                flash('Geçersiz fon grubu seçimi.', 'danger')
+                return redirect(url_for('stopaj_oranlari'))
+
+            yeni_oran = StopajOrani(
+                fon_grubu=fon_grubu,
+                donem_baslangic=datetime.strptime(donem_baslangic_str, '%Y-%m-%d').date(),
+                donem_bitis=datetime.strptime(donem_bitis_str, '%Y-%m-%d').date() if donem_bitis_str else None,
+                elde_tutma_gun=int(elde_tutma_gun_str) if elde_tutma_gun_str else None,
+                oran=Decimal(str(oran_str)),
+                aciklama=aciklama
+            )
+            db.session.add(yeni_oran)
+            db.session.commit()
+            flash('Stopaj oranı dönemi eklendi.', 'success')
+            return redirect(url_for('stopaj_oranlari'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Stopaj oranı eklenemedi: {e}', 'danger')
+            return redirect(url_for('stopaj_oranlari'))
+
+    oranlar = StopajOrani.query.order_by(
+        StopajOrani.fon_grubu.asc(),
+        StopajOrani.donem_baslangic.desc(),
+        StopajOrani.id.desc()
+    ).all()
+    return render_template('stopaj_oranlari.html', oranlar=oranlar)
+
+
 @app.route('/yatirimlar')
 @login_required
 def yatirimlar():
@@ -2017,11 +2059,7 @@ def stopaj_simulasyon(yatirim_id):
 def stopaj_orani_ekle():
     """
     Yeni bir stopaj oranı dönemi ekler.
-    Sadece admin kullanıcısı erişebilir.
     """
-    if current_user.username != 'admin':
-        return jsonify({'error': 'Yetkisiz erişim'}), 403
-
     data = request.get_json() or {}
 
     try:
