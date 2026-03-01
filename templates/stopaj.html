@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Stopaj Hesaplama - Financial Portal{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h1 class="mb-0"><i class="fas fa-percent me-2"></i>Stopaj Simulasyonu</h1>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">Toplam Brut Kar</div>
+                    <div class="h4 mb-0">₺{{ "{:,.2f}".format(toplam_brut_kar) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">Toplam Stopaj Yuku</div>
+                    <div class="h4 mb-0 text-danger">₺{{ "{:,.2f}".format(toplam_stopaj) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small">Toplam Net Kar</div>
+                    <div class="h4 mb-0 {{ 'text-success' if toplam_net_kar >= 0 else 'text-danger' }}">
+                        ₺{{ "{:,.2f}".format(toplam_net_kar) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Bilgilendirme:</strong> Bu hesaplamalar tahmini olup yalnızca bilgilendirme amaçlıdır.
+        Stopaj, satış işlemi gerçekleştiğinde aracı kurum tarafından otomatik kesilir.
+        Kesin vergi hesabı için mali müşavirinize danışınız.
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            {% if fon_stopaj_listesi %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Fon</th>
+                            <th>Alış Tarihi</th>
+                            <th>Elde Tutma</th>
+                            <th>Fon Grubu</th>
+                            <th>Brut Kar</th>
+                            <th>Stopaj %</th>
+                            <th>Stopaj Tutarı</th>
+                            <th>Net Kar</th>
+                            <th>Simulasyon</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in fon_stopaj_listesi %}
+                        {% set y = item.yatirim %}
+                        {% set h = item.hesap %}
+                        <tr id="row-{{ y.id }}">
+                            <td>
+                                <strong>{{ y.kod }}</strong><br>
+                                <small class="text-muted">{{ y.isim or '-' }}</small>
+                            </td>
+                            <td>{{ y.alis_tarihi.strftime('%d.%m.%Y') }}</td>
+                            <td><span id="elde-{{ y.id }}">{{ h.elde_tutma_gun }} gün</span></td>
+                            <td>
+                                <select class="form-select form-select-sm"
+                                        onchange="guncelleFonGrubu({{ y.id }}, this.value)">
+                                    <option value="" {{ 'selected' if not y.fon_grubu else '' }}>Belirsiz</option>
+                                    {% for grup_kod, grup_etiket in fon_gruplari.items() %}
+                                    <option value="{{ grup_kod }}" {{ 'selected' if y.fon_grubu == grup_kod else '' }}>
+                                        {{ grup_kod }} - {{ grup_etiket }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td id="brut-{{ y.id }}" class="{{ 'text-success' if h.brut_kar >= 0 else 'text-danger' }}">
+                                ₺{{ "{:+,.2f}".format(h.brut_kar) }}
+                            </td>
+                            <td id="oran-{{ y.id }}">
+                                {% if h.stopaj_orani is not none %}
+                                    %{{ "{:.2f}".format(h.stopaj_orani) }}
+                                {% else %}
+                                    <span class="badge bg-secondary">Grup seçin</span>
+                                {% endif %}
+                            </td>
+                            <td id="stopaj-{{ y.id }}" class="text-danger">
+                                ₺{{ "{:,.2f}".format(h.stopaj_tutari) }}
+                            </td>
+                            <td id="net-{{ y.id }}" class="{{ 'text-success' if h.net_kar >= 0 else 'text-danger' }}">
+                                ₺{{ "{:+,.2f}".format(h.net_kar) }}
+                            </td>
+                            <td>
+                                <button type="button"
+                                        class="btn btn-outline-info btn-sm"
+                                        onclick="simulasyonAc({{ y.id }}, '{{ y.kod }}', '{{ (y.isim or '')|replace(\"'\", \"\\'\") }}')">
+                                    Hesapla
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-4 text-center text-muted">Stopaj hesabı için fon bulunamadı.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="simulasyonModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="simulasyonTitle">Stopaj Simulasyonu</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="simYatirimId">
+                <div class="mb-3">
+                    <label class="form-label">Satış Fiyatı</label>
+                    <input type="number" class="form-control" id="simSatisFiyati" step="0.000001" min="0">
+                    <small class="text-muted">Boş bırakırsanız güncel fiyat kullanılır.</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Satış Tarihi</label>
+                    <input type="date" class="form-control" id="simSatisTarihi">
+                    <small class="text-muted">Boş bırakırsanız bugün kullanılır.</small>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="simulasyonHesapla()">Hesapla</button>
+                <hr>
+                <div id="simSonuc" class="small text-muted">Henüz hesaplama yapılmadı.</div>
+                <div class="mt-2 text-muted small">
+                    Aynı fonu farklı tarihlerde aldıysanız her alım için ayrı stopaj uygulanır.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function csrfTokenAl() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? el.getAttribute('content') : '';
+}
+
+function money(v) {
+    const n = Number(v || 0);
+    return '₺' + n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function guncelleFonGrubu(yatirimId, fonGrubu) {
+    fetch(`/api/fon_grubu_guncelle/${yatirimId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfTokenAl()
+        },
+        body: JSON.stringify({ fon_grubu: fonGrubu || null })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) return;
+        const oranCell = document.getElementById(`oran-${yatirimId}`);
+        const stopajCell = document.getElementById(`stopaj-${yatirimId}`);
+        const netCell = document.getElementById(`net-${yatirimId}`);
+
+        oranCell.innerHTML = data.stopaj_orani != null ? `%${Number(data.stopaj_orani).toFixed(2)}` : '<span class="badge bg-secondary">Grup seçin</span>';
+        stopajCell.textContent = money(data.stopaj_tutari);
+        netCell.textContent = (Number(data.net_kar) >= 0 ? '+' : '') + money(data.net_kar).replace('₺', '₺');
+        netCell.classList.toggle('text-success', Number(data.net_kar) >= 0);
+        netCell.classList.toggle('text-danger', Number(data.net_kar) < 0);
+    });
+}
+
+function simulasyonAc(yatirimId, kod, isim) {
+    document.getElementById('simYatirimId').value = yatirimId;
+    document.getElementById('simSatisFiyati').value = '';
+    document.getElementById('simSatisTarihi').value = '';
+    document.getElementById('simSonuc').innerHTML = 'Henüz hesaplama yapılmadı.';
+    document.getElementById('simulasyonTitle').textContent = `Stopaj Simulasyonu - ${kod} ${isim ? '- ' + isim : ''}`;
+    const modal = new bootstrap.Modal(document.getElementById('simulasyonModal'));
+    modal.show();
+}
+
+function simulasyonHesapla() {
+    const yatirimId = document.getElementById('simYatirimId').value;
+    const satis_fiyati = document.getElementById('simSatisFiyati').value;
+    const satis_tarihi = document.getElementById('simSatisTarihi').value;
+    const body = {};
+    if (satis_fiyati) body.satis_fiyati = satis_fiyati;
+    if (satis_tarihi) body.satis_tarihi = satis_tarihi;
+
+    fetch(`/api/stopaj_simulasyon/${yatirimId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfTokenAl()
+        },
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) return;
+        document.getElementById('simSonuc').innerHTML = `
+            <div><strong>Brut Kar:</strong> ${money(data.brut_kar)}</div>
+            <div><strong>Stopaj Oranı:</strong> ${data.stopaj_orani != null ? '%' + Number(data.stopaj_orani).toFixed(2) : 'Grup belirsiz'}</div>
+            <div><strong>Stopaj Tutarı:</strong> ${money(data.stopaj_tutari)}</div>
+            <div class="mt-2"><strong>Net Kar:</strong> <span class="${Number(data.net_kar) >= 0 ? 'text-success' : 'text-danger'}">${money(data.net_kar)}</span></div>
+            <div class="mt-1"><small>Elde tutma: ${data.elde_tutma_gun} gün</small></div>
+        `;
+    });
+}
+</script>
+{% endblock %}
+

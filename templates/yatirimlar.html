@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block title %}Yatırımlar - Financial Portal{% endblock %}
 
@@ -1505,6 +1505,17 @@ function validateCode() {
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `;
+            if (tip === 'fon' && data.fon_grubu) {
+                const grupRenkleri = {'A': 'success', 'B': 'primary', 'C': 'warning', 'D': 'info'};
+                const renk = grupRenkleri[data.fon_grubu] || 'secondary';
+                kodSonuc.innerHTML += `
+                    <div class="mt-1">
+                        <small class="text-muted">Stopaj Grubu: </small>
+                        <span class="badge bg-${renk}">Grup ${data.fon_grubu} - ${data.fon_grubu_etiket}</span>
+                        <small class="text-muted ms-2">Fon Türü: ${data.fon_tur_kodu || '-'}</small>
+                    </div>
+                `;
+            }
             document.getElementById('alis_fiyati').value = data.guncel_fiyat.toFixed(6);
 
             // Auto-hide success alert after 5 seconds
