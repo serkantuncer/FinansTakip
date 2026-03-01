@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Stopaj Hesaplama - Financial Portal{% endblock %}
+{% block title %}Fon Stopaj Simülasyonu - Financial Portal{% endblock %}
 
 {% block content %}
 <div class="container">
     <div class="row mb-4">
         <div class="col-12 d-flex justify-content-between align-items-center">
-            <h1 class="mb-0"><i class="fas fa-percent me-2"></i>Stopaj Simulasyonu</h1>
+            <h1 class="mb-0"><i class="fas fa-percent me-2"></i>Fon Stopaj Simülasyonu</h1>
         </div>
     </div>
 
@@ -105,7 +105,7 @@
                             <td>
                                 <button type="button"
                                         class="btn btn-outline-info btn-sm"
-                                        onclick="simulasyonAc({{ y.id }}, '{{ y.kod }}', '{{ (y.isim or '')|replace(\"'\", \"\\'\") }}')">
+                                        onclick='simulasyonAc({{ y.id }}, {{ y.kod|tojson }}, {{ (y.isim or "")|tojson }})'>
                                     Hesapla
                                 </button>
                             </td>
@@ -145,6 +145,9 @@
                 <div id="simSonuc" class="small text-muted">Henüz hesaplama yapılmadı.</div>
                 <div class="mt-2 text-muted small">
                     Aynı fonu farklı tarihlerde aldıysanız her alım için ayrı stopaj uygulanır.
+                </div>
+                <div class="text-muted small">
+                    Not: Seçilen tarih için geçmiş fiyat verisi yoksa anlık fiyat kullanılır.
                 </div>
             </div>
         </div>
@@ -221,6 +224,7 @@ function simulasyonHesapla() {
             <div><strong>Brut Kar:</strong> ${money(data.brut_kar)}</div>
             <div><strong>Stopaj Oranı:</strong> ${data.stopaj_orani != null ? '%' + Number(data.stopaj_orani).toFixed(2) : 'Grup belirsiz'}</div>
             <div><strong>Stopaj Tutarı:</strong> ${money(data.stopaj_tutari)}</div>
+            <div><strong>Kullanılan Satış Fiyatı:</strong> ${money(data.kullanilan_satis_fiyati)} <small class="text-muted">(${data.fiyat_kaynagi || 'bilinmiyor'})</small></div>
             <div class="mt-2"><strong>Net Kar:</strong> <span class="${Number(data.net_kar) >= 0 ? 'text-success' : 'text-danger'}">${money(data.net_kar)}</span></div>
             <div class="mt-1"><small>Elde tutma: ${data.elde_tutma_gun} gün</small></div>
         `;
@@ -228,4 +232,3 @@ function simulasyonHesapla() {
 }
 </script>
 {% endblock %}
-

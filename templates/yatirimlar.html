@@ -107,7 +107,18 @@
                                             {% endif %}
                                         </td>
                                         <td>{{ grup.isim[:20] + '...' if grup.isim and grup.isim|length > 20 else grup.isim or '-' }}</td>
-                                        <td><span class="badge bg-secondary">{{ grup.tip|title }}</span></td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ grup.tip|title }}</span>
+                                            {% if grup.tip == 'fon' %}
+                                                {% set fg = grup.kalemler[0]['fon_grubu'] if grup.kalemler and grup.kalemler[0]['fon_grubu'] else None %}
+                                                <br>
+                                                {% if fg %}
+                                                    <small class="badge bg-info mt-1">Stopaj Grup {{ fg }}</small>
+                                                {% else %}
+                                                    <small class="badge bg-warning text-dark mt-1">Grup Belirsiz</small>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
                                         <td>₺{{ "{:,.6f}".format(grup.toplam_maliyet / (grup.toplam_maliyet / (grup.kalemler[0]['alis_fiyati'] if grup.kalemler else 1)) if grup.kalemler else 0) }}</td>
                                         <td>
                                             {% set toplam_miktar = grup.kalemler|map(attribute='miktar')|sum %}
@@ -182,6 +193,14 @@
                                         <small class="text-muted">{{ grup.isim or '-' }}</small>
                                     </div>
                                     <span class="badge bg-secondary">{{ grup.tip|title }}</span>
+                                    {% if grup.tip == 'fon' %}
+                                        {% set fg = grup.kalemler[0]['fon_grubu'] if grup.kalemler and grup.kalemler[0]['fon_grubu'] else None %}
+                                        {% if fg %}
+                                            <div><small class="badge bg-info mt-1">Stopaj Grup {{ fg }}</small></div>
+                                        {% else %}
+                                            <div><small class="badge bg-warning text-dark mt-1">Grup Belirsiz</small></div>
+                                        {% endif %}
+                                    {% endif %}
                                 </div>
 
                                 <div class="row g-2 mb-2">

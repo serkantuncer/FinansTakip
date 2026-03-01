@@ -444,6 +444,21 @@ FON_UNVAN_STOPAJ_GRUBU = [
 ]
 
 
+def fon_grubu_tespit_et(fon_tur_kodu, unvan_tipi):
+    """FONTURKOD veya fon unvanindan stopaj grubunu tespit eder."""
+    fon_grubu = FONTURKOD_STOPAJ_GRUBU.get((fon_tur_kodu or '').upper())
+    otomatik = fon_grubu is not None
+
+    if not fon_grubu and unvan_tipi:
+        unvan_upper = unvan_tipi.upper()
+        for anahtar_kelimeler, grup in FON_UNVAN_STOPAJ_GRUBU:
+            if any(k in unvan_upper for k in anahtar_kelimeler):
+                fon_grubu = grup
+                break
+
+    return fon_grubu, otomatik
+
+
 def fon_bilgisi_cek(fon_kodu):
     """
     TEFAS'tan fon tipi, semsiye fon türü ve kurucu bilgilerini çeker.
@@ -465,7 +480,10 @@ def fon_bilgisi_cek(fon_kodu):
     try:
         response = http_session.get(api_url, headers=headers, timeout=15)
         if response.status_code == 200:
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
             if data and len(data) > 0:
                 kayit = data[0]
                 fon_tur_kodu = kayit.get('FONTURKOD') or kayit.get('SFONTUR', '')
@@ -473,15 +491,7 @@ def fon_bilgisi_cek(fon_kodu):
                 unvan_tipi = kayit.get('FONUNVANTIP') or kayit.get('FONUNVAN', '')
                 kurucu_kodu = kayit.get('KURUCUKOD', '')
 
-                fon_grubu = FONTURKOD_STOPAJ_GRUBU.get(fon_tur_kodu.upper() if fon_tur_kodu else '')
-                otomatik = fon_grubu is not None
-
-                if not fon_grubu and unvan_tipi:
-                    unvan_upper = unvan_tipi.upper()
-                    for anahtar_kelimeler, grup in FON_UNVAN_STOPAJ_GRUBU:
-                        if any(k in unvan_upper for k in anahtar_kelimeler):
-                            fon_grubu = grup
-                            break
+                fon_grubu, otomatik = fon_grubu_tespit_et(fon_tur_kodu, unvan_tipi)
 
                 app.logger.info(
                     f"Fon bilgisi çekildi: {fon_kodu_upper} | "
@@ -496,10 +506,39 @@ def fon_bilgisi_cek(fon_kodu):
                     'fon_grubu_otomatik': otomatik,
                 }
 
+        # BindHistoryInfo cevap vermezse fon adindan grup tespiti fallback
+        fiyat_verisi = tefas_fon_verisi_cek(fon_kodu_upper)
+        if fiyat_verisi and fiyat_verisi.get('isim'):
+            unvan_tipi = fiyat_verisi.get('isim', '')
+            fon_grubu, _ = fon_grubu_tespit_et('', unvan_tipi)
+            app.logger.info(
+                f"Fon bilgisi fallback (unvan) kullanıldı: {fon_kodu_upper} | Grup={fon_grubu}"
+            )
+            return {
+                'fon_tur_kodu': '',
+                'semsiye_fon_turu': '',
+                'fon_unvan_tipi': unvan_tipi,
+                'kurucu_kodu': '',
+                'fon_grubu': fon_grubu,
+                'fon_grubu_otomatik': False,
+            }
+
         app.logger.warning(f"TEFAS fon bilgisi API yanıt vermedi: {fon_kodu_upper}")
         return None
     except Exception as e:
         app.logger.error(f"Fon bilgisi çekme hatası ({fon_kodu_upper}): {e}")
+        fiyat_verisi = tefas_fon_verisi_cek(fon_kodu_upper)
+        if fiyat_verisi and fiyat_verisi.get('isim'):
+            unvan_tipi = fiyat_verisi.get('isim', '')
+            fon_grubu, _ = fon_grubu_tespit_et('', unvan_tipi)
+            return {
+                'fon_tur_kodu': '',
+                'semsiye_fon_turu': '',
+                'fon_unvan_tipi': unvan_tipi,
+                'kurucu_kodu': '',
+                'fon_grubu': fon_grubu,
+                'fon_grubu_otomatik': False,
+            }
         return None
 
 
@@ -550,14 +589,27 @@ def stopaj_orani_bul(fon_grubu, alis_tarihi, satis_tarihi=None):
     if not adaylar:
         return None
 
-    for aday in adaylar:
-        if aday.elde_tutma_gun is not None:
-            if elde_tutma_gun < aday.elde_tutma_gun:
-                return Decimal(str(aday.oran))
-        else:
+    kosullu_oranlar = sorted(
+        [a for a in adaylar if a.elde_tutma_gun is not None],
+        key=lambda x: x.elde_tutma_gun
+    )
+    for aday in kosullu_oranlar:
+        if elde_tutma_gun < aday.elde_tutma_gun:
             return Decimal(str(aday.oran))
 
+    genel_oranlar = [a for a in adaylar if a.elde_tutma_gun is None]
+    if genel_oranlar:
+        return Decimal(str(genel_oranlar[0].oran))
+
     return None
+
+
+def yatirim_icin_satis_fiyati_cek(yatirim):
+    """Simulasyon icin yatirimin anlik satis fiyatini kaynaktan ceker."""
+    basarili, veri = fiyat_verisi_cek_by_tip_kod(yatirim.tip, yatirim.kod)
+    if basarili and veri and veri.get('guncel_fiyat'):
+        return veri.get('guncel_fiyat'), veri.get('tarih')
+    return None, None
 
 
 def stopaj_hesapla(yatirim, satis_tarihi=None, satis_fiyati=None):
@@ -1225,7 +1277,9 @@ def grupla_yatirimlar(yatirimlar, sadece_guncel_fiyatli=False):
             'getiri': float(getiri),
             'kategori': y.kategori,
             'notlar': y.notlar,
-            'son_guncelleme': y.son_guncelleme
+            'son_guncelleme': y.son_guncelleme,
+            'fon_grubu': y.fon_grubu,
+            'fon_grubu_otomatik': y.fon_grubu_otomatik
         })
 
     for grup in yatirim_gruplari_liste.values():
@@ -1928,6 +1982,19 @@ def stopaj_simulasyon(yatirim_id):
 
     satis_fiyati = Decimal(satis_fiyati_str) if satis_fiyati_str else None
     satis_tarihi = datetime.strptime(satis_tarihi_str, '%Y-%m-%d') if satis_tarihi_str else None
+    fiyat_kaynagi = 'manuel'
+
+    if satis_fiyati is None:
+        cekilen_fiyat, cekim_tarihi = yatirim_icin_satis_fiyati_cek(yatirim)
+        if cekilen_fiyat is not None:
+            satis_fiyati = Decimal(str(cekilen_fiyat))
+            fiyat_kaynagi = f"anlik ({cekim_tarihi.strftime('%Y-%m-%d %H:%M') if cekim_tarihi else 'simdi'})"
+        elif yatirim.guncel_fiyat is not None:
+            satis_fiyati = Decimal(str(yatirim.guncel_fiyat))
+            fiyat_kaynagi = 'kayitli guncel_fiyat'
+        else:
+            satis_fiyati = Decimal(str(yatirim.alis_fiyati))
+            fiyat_kaynagi = 'alis_fiyati fallback'
 
     hesap = stopaj_hesapla(yatirim, satis_tarihi=satis_tarihi, satis_fiyati=satis_fiyati)
 
@@ -1939,7 +2006,9 @@ def stopaj_simulasyon(yatirim_id):
         'net_kar': float(hesap['net_kar']),
         'elde_tutma_gun': hesap['elde_tutma_gun'],
         'fon_grubu': hesap['fon_grubu'],
-        'hesaplanamadi': hesap['hesaplanamadi']
+        'hesaplanamadi': hesap['hesaplanamadi'],
+        'kullanilan_satis_fiyati': float(satis_fiyati) if satis_fiyati is not None else None,
+        'fiyat_kaynagi': fiyat_kaynagi
     })
 
 
