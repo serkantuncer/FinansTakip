@@ -85,57 +85,148 @@
         </div>
     </div>
 
-    <!-- Altın ve Döviz için Alış/Satış Fiyatları Özeti -->
-    {% if altin_doviz_yatirim > 0 %}
+    <!-- Altın ve Döviz için ayrı Alış/Satış Özetleri -->
+    {% if altin_ozet.yatirim > 0 or doviz_ozet.yatirim > 0 %}
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-warning">
                 <div class="card-header bg-warning text-dark">
                     <h5 class="mb-0">
                         <i class="fas fa-coins me-2"></i>
-                        Altın & Döviz - Alış/Satış Fiyatları Karşılaştırması
+                        Altın ve Döviz - Ayrı Alış/Satış Özeti
                     </h5>
                 </div>
                 <div class="card-body">
-                    <div class="row text-center align-items-stretch">
-                        <div class="col-md-4 mb-3">
-                            <div class="comparison-box comparison-box-total p-3 rounded h-100 d-flex flex-column justify-content-center">
-                                <h6 class="mb-2">Toplam Yatırım</h6>
-                                <h4 class="mb-0">₺{{ "{:,.2f}".format(altin_doviz_yatirim) }}</h4>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="comparison-box p-3 bg-success bg-opacity-10 rounded border border-success h-100">
-                                <h6 class="text-success mb-2">
-                                    <i class="fas fa-arrow-down me-1"></i>Alış Fiyatından
+                    <div class="row align-items-stretch">
+                        {% if altin_ozet.yatirim > 0 %}
+                        <div class="col-lg-6 mb-3">
+                            <div class="comparison-box p-3 rounded border border-warning-subtle h-100">
+                                <h6 class="mb-3 text-warning-emphasis">
+                                    <i class="fas fa-coins me-1"></i>Altın
                                 </h6>
-                                <p class="mb-1"><strong>Güncel Değer:</strong> ₺{{ "{:,.2f}".format(altin_doviz_alis.guncel_deger) }}</p>
-                                <p class="mb-1 {% if altin_doviz_alis.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                    <strong>Kâr/Zarar:</strong> ₺{{ "{:+,.2f}".format(altin_doviz_alis.kar_zarar) }}
-                                </p>
-                                <p class="mb-0 {% if altin_doviz_alis.kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                    <strong>Getiri:</strong> {{ "{:+.2f}".format(altin_doviz_alis.kar_zarar_yuzde) }}%
-                                </p>
+                                <p class="mb-2"><strong>Toplam Yatırım:</strong> ₺{{ "{:,.2f}".format(altin_ozet.yatirim) }}</p>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <div class="p-2 bg-success bg-opacity-10 rounded border border-success">
+                                            <small class="d-block fw-semibold text-success">Alış Bazlı</small>
+                                            <small class="d-block">Toplam Değer: ₺{{ "{:,.2f}".format(altin_ozet.alis_guncel_deger) }}</small>
+                                            <small class="d-block {% if altin_ozet.alis_kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Kâr/Zarar: ₺{{ "{:+,.2f}".format(altin_ozet.alis_kar_zarar) }}
+                                            </small>
+                                            <small class="d-block {% if altin_ozet.alis_kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Getiri: {{ "{:+.2f}".format(altin_ozet.alis_kar_zarar_yuzde) }}%
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="p-2 bg-danger bg-opacity-10 rounded border border-danger">
+                                            <small class="d-block fw-semibold text-danger">Satış Bazlı</small>
+                                            <small class="d-block">Toplam Değer: ₺{{ "{:,.2f}".format(altin_ozet.satis_guncel_deger) }}</small>
+                                            <small class="d-block {% if altin_ozet.satis_kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Kâr/Zarar: ₺{{ "{:+,.2f}".format(altin_ozet.satis_kar_zarar) }}
+                                            </small>
+                                            <small class="d-block {% if altin_ozet.satis_kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Getiri: {{ "{:+.2f}".format(altin_ozet.satis_kar_zarar_yuzde) }}%
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="comparison-box p-3 bg-danger bg-opacity-10 rounded border border-danger h-100">
-                                <h6 class="text-danger mb-2">
-                                    <i class="fas fa-arrow-up me-1"></i>Satış Fiyatından
+                        {% endif %}
+                        {% if doviz_ozet.yatirim > 0 %}
+                        <div class="col-lg-6 mb-3">
+                            <div class="comparison-box p-3 rounded border border-info-subtle h-100">
+                                <h6 class="mb-3 text-info-emphasis">
+                                    <i class="fas fa-dollar-sign me-1"></i>Döviz
                                 </h6>
-                                <p class="mb-1"><strong>Güncel Değer:</strong> ₺{{ "{:,.2f}".format(altin_doviz_satis.guncel_deger) }}</p>
-                                <p class="mb-1 {% if altin_doviz_satis.kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                    <strong>Kâr/Zarar:</strong> ₺{{ "{:+,.2f}".format(altin_doviz_satis.kar_zarar) }}
-                                </p>
-                                <p class="mb-0 {% if altin_doviz_satis.kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                    <strong>Getiri:</strong> {{ "{:+.2f}".format(altin_doviz_satis.kar_zarar_yuzde) }}%
-                                </p>
+                                <p class="mb-2"><strong>Toplam Yatırım:</strong> ₺{{ "{:,.2f}".format(doviz_ozet.yatirim) }}</p>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <div class="p-2 bg-success bg-opacity-10 rounded border border-success">
+                                            <small class="d-block fw-semibold text-success">Alış Bazlı</small>
+                                            <small class="d-block">Toplam Değer: ₺{{ "{:,.2f}".format(doviz_ozet.alis_guncel_deger) }}</small>
+                                            <small class="d-block {% if doviz_ozet.alis_kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Kâr/Zarar: ₺{{ "{:+,.2f}".format(doviz_ozet.alis_kar_zarar) }}
+                                            </small>
+                                            <small class="d-block {% if doviz_ozet.alis_kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Getiri: {{ "{:+.2f}".format(doviz_ozet.alis_kar_zarar_yuzde) }}%
+                                            </small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="p-2 bg-danger bg-opacity-10 rounded border border-danger">
+                                            <small class="d-block fw-semibold text-danger">Satış Bazlı</small>
+                                            <small class="d-block">Toplam Değer: ₺{{ "{:,.2f}".format(doviz_ozet.satis_guncel_deger) }}</small>
+                                            <small class="d-block {% if doviz_ozet.satis_kar_zarar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Kâr/Zarar: ₺{{ "{:+,.2f}".format(doviz_ozet.satis_kar_zarar) }}
+                                            </small>
+                                            <small class="d-block {% if doviz_ozet.satis_kar_zarar_yuzde >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                Getiri: {{ "{:+.2f}".format(doviz_ozet.satis_kar_zarar_yuzde) }}%
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                        {% endif %}
                     </div>
                     <div class="alert alert-info mt-3 mb-0">
                         <i class="fas fa-info-circle me-2"></i>
-                        <small><strong>Not:</strong> Altın ve Döviz yatırımlarınız için alış fiyatından ve satış fiyatından hesaplanan değerler yukarıda ayrı ayrı gösterilmektedir. Fon ve Hisse yatırımları bu hesaplamaya dahil değildir.</small>
+                        <small><strong>Not:</strong> Altın ve Döviz yatırımları ayrı ayrı hesaplanır. Her kartta alış bazlı ve satış bazlı toplam değer ile kâr/zarar gösterilir. Fon ve Hisse yatırımları bu hesaplamaya dahil değildir.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if fon_ozet.kayit_sayisi > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Fon - Stopajlı/Stopajsız Özet</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-lg-4">
+                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important;">
+                                <div class="small fw-semibold" style="color: #4b5563;">Stopajsız Toplam Fon Değeri</div>
+                                <div class="h5 mb-0 fw-bold" style="color: #111827;">₺{{ "{:,.2f}".format(fon_ozet.stopajsiz_toplam_deger) }}</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important;">
+                                <div class="small fw-semibold" style="color: #4b5563;">Toplam Stopaj Yükü</div>
+                                <div class="h5 mb-0 fw-bold" style="color: #111827;">₺{{ "{:,.2f}".format(fon_ozet.toplam_stopaj_yuku) }}</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="p-3 rounded border h-100 text-dark" style="background-color: #f2f4f7; border-color: #cfd6df !important;">
+                                <div class="small fw-semibold" style="color: #4b5563;">Stopajlı Net Fon Değeri</div>
+                                <div class="h5 mb-0 fw-bold" style="color: #111827;">₺{{ "{:,.2f}".format(fon_ozet.stopajli_net_deger) }}</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="p-3 rounded border h-100">
+                                <div class="small text-muted">Stopajsız Toplam Kar/Zarar</div>
+                                <div class="h5 mb-0 {% if fon_ozet.stopajsiz_toplam_kar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ₺{{ "{:+,.2f}".format(fon_ozet.stopajsiz_toplam_kar) }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="p-3 rounded border h-100">
+                                <div class="small text-muted">Stopajlı Toplam Net Kar/Zarar</div>
+                                <div class="h5 mb-0 {% if fon_ozet.stopajli_toplam_net_kar >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ₺{{ "{:+,.2f}".format(fon_ozet.stopajli_toplam_net_kar) }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary mt-3 mb-0 py-2">
+                        <small><strong>Not:</strong> Stopaj hesaplamaları tahminidir, kesin tutar aracı kurum kayıtları ile netleşir.</small>
                     </div>
                 </div>
             </div>

@@ -61,6 +61,20 @@
                     </form>
                 </div>
             </div>
+
+            <div class="card mt-3 border" style="background-color: transparent; border-color: #b8c2d1;">
+                <div class="card-body py-2 px-3">
+                    <div class="small" style="font-size: 0.80rem; line-height: 1.45; color: #334155;">
+                        <div class="mb-2 fw-bold" style="color: #1f2937;">API Kullanım Notu</div>
+                        <div><strong>1.</strong> `POST /api/stopaj_simulasyon/&lt;yatirim_id&gt;`</div>
+                        <div class="mb-1">Gönderim: `satis_tarihi` (YYYY-MM-DD), `satis_fiyati` ve `csrf_token`.</div>
+                        <div class="mb-2">Yanıt: `brut_kar`, `stopaj_orani`, `stopaj_tutari`, `net_kar` alanlarını JSON olarak döner.</div>
+                        <div><strong>2.</strong> `POST /api/stopaj_orani_ekle`</div>
+                        <div>Gönderim: `fon_grubu`, `donem_baslangic`, `donem_bitis` (opsiyonel), `elde_tutma_gun` (opsiyonel), `oran`, `aciklama`, `csrf_token`.</div>
+                        <div class="mt-2" style="color: #475569;">Not: Tüm isteklerde oturum açık olmalı ve CSRF token zorunludur.</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="col-lg-7">
@@ -103,4 +117,3 @@
     </div>
 </div>
 {% endblock %}
-

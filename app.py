@@ -1,4 +1,4 @@
-# app.py - Ana Flask uygulaması
+﻿# app.py - Ana Flask uygulaması
 import os
 import sys
 import shutil
@@ -168,21 +168,21 @@ def stopaj_seed_data():
         return
 
     oranlar = [
-        # GRUP A — Hisse Senedi Yoğun Fon
+        # GRUP A - Hisse Senedi Yoğun Fon
         StopajOrani(fon_grubu='A', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=0.00, aciklama='HSYF - 09.07.2025 öncesi tüm alımlar'),
         StopajOrani(fon_grubu='A', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=365, oran=17.50, aciklama='HSYF - 09.07.2025 sonrası, 1 yıldan az elde tutma'),
         StopajOrani(fon_grubu='A', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=0.00, aciklama='HSYF - 09.07.2025 sonrası, 1 yıl ve üzeri elde tutma'),
-        # GRUP B — TL Standart Fonlar
+        # GRUP B - TL Standart Fonlar
         StopajOrani(fon_grubu='B', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2020, 12, 22), elde_tutma_gun=None, oran=10.00, aciklama='TL Standart - 23.12.2020 öncesi'),
         StopajOrani(fon_grubu='B', donem_baslangic=date(2020, 12, 23), donem_bitis=date(2024, 4, 30), elde_tutma_gun=None, oran=0.00, aciklama='TL Standart - indirimli dönem'),
         StopajOrani(fon_grubu='B', donem_baslangic=date(2024, 5, 1), donem_bitis=date(2024, 10, 31), elde_tutma_gun=None, oran=7.50, aciklama='TL Standart - kademeli artış 1'),
         StopajOrani(fon_grubu='B', donem_baslangic=date(2024, 11, 1), donem_bitis=date(2025, 1, 31), elde_tutma_gun=None, oran=10.00, aciklama='TL Standart - kademeli artış 2'),
         StopajOrani(fon_grubu='B', donem_baslangic=date(2025, 2, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=15.00, aciklama='TL Standart - kademeli artış 3'),
         StopajOrani(fon_grubu='B', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=17.50, aciklama='TL Standart - güncel oran'),
-        # GRUP C — Dövizli / Değişken / Diğer
+        # GRUP C - Dövizli / Değişken / Diğer
         StopajOrani(fon_grubu='C', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=10.00, aciklama='Dövizli/Değişken - 09.07.2025 öncesi'),
         StopajOrani(fon_grubu='C', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=None, oran=17.50, aciklama='Dövizli/Değişken - güncel oran'),
-        # GRUP D — GSYF & GYF
+        # GRUP D - GSYF & GYF
         StopajOrani(fon_grubu='D', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=730, oran=10.00, aciklama='GSYF/GYF - 2 yıldan az'),
         StopajOrani(fon_grubu='D', donem_baslangic=date(2000, 1, 1), donem_bitis=date(2025, 7, 8), elde_tutma_gun=None, oran=0.00, aciklama='GSYF/GYF - 2 yıl ve üzeri'),
         StopajOrani(fon_grubu='D', donem_baslangic=date(2025, 7, 9), donem_bitis=None, elde_tutma_gun=730, oran=17.50, aciklama='GSYF/GYF - 09.07.2025 sonrası, 2 yıldan az'),
@@ -305,7 +305,7 @@ def cache_kaydet(varlik_tipi, kod, veri):
 
 # Veri çekme fonksiyonları
 def tefas_fon_verisi_cek(fon_kodu):
-    """TEFAŞ'tan fon verisi çeker - Güncellenmiş Versiyon"""
+    """TEFAŞ'tan fon verisi çeker - güncellenmiş versiyon."""
     fon_kodu_upper = fon_kodu.upper()
     cached_veri = cache_den_al('fon', fon_kodu_upper)
     if cached_veri:
@@ -317,7 +317,7 @@ def tefas_fon_verisi_cek(fon_kodu):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     }
-    app.logger.info(f"TEFAŞ Verisi Çekiliyor: {fon_kodu_upper} - URL: {url}")
+    app.logger.info(f"TEFAŞ verisi çekiliyor: {fon_kodu_upper} - URL: {url}")
     
     try:
         response = http_session.get(url, headers=headers, timeout=15)
@@ -404,7 +404,7 @@ def tefas_fon_verisi_cek(fon_kodu):
             'tarih': datetime.now()
         }
         cache_kaydet('fon', fon_kodu_upper, veri)
-        app.logger.info(f"TEFAŞ Verisi Başarıyla Çekildi: {fon_kodu_upper} - Veri: {veri}")
+        app.logger.info(f"TEFAŞ verisi başarıyla çekildi: {fon_kodu_upper} - Veri: {veri}")
         return veri
         
     except requests.exceptions.Timeout:
@@ -413,25 +413,25 @@ def tefas_fon_verisi_cek(fon_kodu):
     except requests.exceptions.RequestException as e:
         app.logger.error(f"TEFAŞ veri çekme (Request) hatası ({fon_kodu_upper}): {str(e)}")
         if hasattr(e, 'response') and e.response is not None:
-            app.logger.error(f"TEFAŞ Hata Yanıt Kodu: {e.response.status_code}")
+            app.logger.error(f"TEFAŞ hata yanıt kodu: {e.response.status_code}")
         return None
     except Exception as e:
-        app.logger.error(f"TEFAŞ veri çekme (Genel) hatası ({fon_kodu_upper}): {str(e)}", exc_info=True)
+        app.logger.error(f"TEFAŞ veri çekme (genel) hatası ({fon_kodu_upper}): {str(e)}", exc_info=True)
         # Try alternative TEFAS search as fallback
         return tefas_alternatif_arama(fon_kodu_upper)
 
 
 # Fon türü -> stopaj grubu eşleştirme tablosu
 FONTURKOD_STOPAJ_GRUBU = {
-    # GRUP A — Hisse Yoğun
+    # GRUP A - Hisse Yoğun
     'HIS': 'A', 'HSY': 'A', 'BYF-HIS': 'A',
-    # GRUP B — TL Standart
+    # GRUP B - TL Standart
     'PAR': 'B', 'BOR': 'B', 'KAT': 'B',
     'MAD': 'B', 'SEP': 'B', 'FON': 'B',
-    # GRUP C — Dövizli / Değişken / Diğer
+    # GRUP C - Dövizli / Değişken / Diğer
     'DEG': 'C', 'KAR': 'C', 'SER': 'C',
     'DOV': 'C', 'DYB': 'C', 'YAB': 'C', 'EUR': 'C',
-    # GRUP D — GSYF & GYF
+    # GRUP D - GSYF & GYF
     'GYF': 'D', 'GSY': 'D',
 }
 
@@ -662,7 +662,7 @@ except Exception as e:
     app.logger.error(f"Veritabanı initialization hatası: {e}")
 
 def tefas_alternatif_arama(fon_kodu):
-    """TEFAŞ alternatif API kullanarak fon arama"""
+    """TEFAŞ alternatif API kullanarak fon arama."""
     fon_kodu_upper = fon_kodu.upper()
     cached_veri = cache_den_al('fon', fon_kodu_upper)
     if cached_veri:
@@ -679,7 +679,7 @@ def tefas_alternatif_arama(fon_kodu):
             'Referer': 'https://www.tefas.gov.tr/'
         }
         
-        app.logger.info(f"TEFAŞ Alternatif API deneniyor: {fon_kodu_upper}")
+        app.logger.info(f"TEFAŞ alternatif API deneniyor: {fon_kodu_upper}")
         response = http_session.get(api_url, headers=headers, timeout=15)
         
         if response.status_code == 200:
@@ -1127,17 +1127,32 @@ def hesapla_portfoy_ozeti(yatirimlar):
     kategori_dagilim = {}
     tip_ozet = {}
 
-    altin_doviz_alis = {
-        'guncel_deger': Decimal('0'),
-        'kar_zarar': Decimal('0'),
-        'kar_zarar_yuzde': 0
+    altin_ozet = {
+        'yatirim': Decimal('0'),
+        'alis_guncel_deger': Decimal('0'),
+        'satis_guncel_deger': Decimal('0'),
+        'alis_kar_zarar': 0.0,
+        'satis_kar_zarar': 0.0,
+        'alis_kar_zarar_yuzde': 0.0,
+        'satis_kar_zarar_yuzde': 0.0
     }
-    altin_doviz_satis = {
-        'guncel_deger': Decimal('0'),
-        'kar_zarar': Decimal('0'),
-        'kar_zarar_yuzde': 0
+    doviz_ozet = {
+        'yatirim': Decimal('0'),
+        'alis_guncel_deger': Decimal('0'),
+        'satis_guncel_deger': Decimal('0'),
+        'alis_kar_zarar': 0.0,
+        'satis_kar_zarar': 0.0,
+        'alis_kar_zarar_yuzde': 0.0,
+        'satis_kar_zarar_yuzde': 0.0
     }
-    altin_doviz_yatirim = Decimal('0')
+    fon_ozet = {
+        'kayit_sayisi': 0,
+        'stopajsiz_toplam_deger': 0.0,
+        'stopajsiz_toplam_kar': 0.0,
+        'toplam_stopaj_yuku': 0.0,
+        'stopajli_net_deger': 0.0,
+        'stopajli_toplam_net_kar': 0.0
+    }
 
     for y in yatirimlar:
         maliyet = y.alis_fiyati * y.miktar
@@ -1173,39 +1188,66 @@ def hesapla_portfoy_ozeti(yatirimlar):
             tip_ozet[tip]['guncel_deger'] += maliyet
 
         if y.tip in ['altin', 'doviz']:
-            altin_doviz_yatirim += maliyet
+            hedef_ozet = altin_ozet if y.tip == 'altin' else doviz_ozet
+            hedef_ozet['yatirim'] += maliyet
 
             if y.guncel_alis_fiyat and y.guncel_alis_fiyat > 0:
-                altin_doviz_alis['guncel_deger'] += y.guncel_alis_fiyat * y.miktar
+                hedef_ozet['alis_guncel_deger'] += y.guncel_alis_fiyat * y.miktar
             elif y.guncel_fiyat and y.guncel_fiyat > 0:
-                altin_doviz_alis['guncel_deger'] += y.guncel_fiyat * y.miktar
+                hedef_ozet['alis_guncel_deger'] += y.guncel_fiyat * y.miktar
             else:
-                altin_doviz_alis['guncel_deger'] += maliyet
+                hedef_ozet['alis_guncel_deger'] += maliyet
 
             if y.guncel_satis_fiyat and y.guncel_satis_fiyat > 0:
-                altin_doviz_satis['guncel_deger'] += y.guncel_satis_fiyat * y.miktar
+                hedef_ozet['satis_guncel_deger'] += y.guncel_satis_fiyat * y.miktar
             elif y.guncel_fiyat and y.guncel_fiyat > 0:
-                altin_doviz_satis['guncel_deger'] += y.guncel_fiyat * y.miktar
+                hedef_ozet['satis_guncel_deger'] += y.guncel_fiyat * y.miktar
             else:
-                altin_doviz_satis['guncel_deger'] += maliyet
+                hedef_ozet['satis_guncel_deger'] += maliyet
+
+        if y.tip == 'fon' and y.guncel_fiyat and y.guncel_fiyat > 0:
+            fon_ozet['stopajsiz_toplam_deger'] += float(y.guncel_fiyat * y.miktar)
+            stopaj = stopaj_hesapla(y)
+            if stopaj['stopaj_orani'] is not None:
+                fon_ozet['toplam_stopaj_yuku'] += float(stopaj['stopaj_tutari'])
+                fon_ozet['stopajsiz_toplam_kar'] += float(stopaj['brut_kar'])
+                fon_ozet['stopajli_toplam_net_kar'] += float(stopaj['net_kar'])
+                fon_ozet['kayit_sayisi'] += 1
 
     toplam_yatirim_float = float(toplam_yatirim)
     guncel_deger_float = float(guncel_deger)
     kar_zarar = guncel_deger_float - toplam_yatirim_float
     kar_zarar_yuzde = (kar_zarar / toplam_yatirim_float * 100) if toplam_yatirim_float > 0 else 0
 
-    if altin_doviz_yatirim > 0:
-        altin_doviz_yatirim_float = float(altin_doviz_yatirim)
-        altin_doviz_alis['guncel_deger'] = float(altin_doviz_alis['guncel_deger'])
-        altin_doviz_alis['kar_zarar'] = altin_doviz_alis['guncel_deger'] - altin_doviz_yatirim_float
+    for ozet in [altin_ozet, doviz_ozet]:
+        yatirim_float = float(ozet['yatirim'])
+        alis_float = float(ozet['alis_guncel_deger'])
+        satis_float = float(ozet['satis_guncel_deger'])
+        ozet['yatirim'] = yatirim_float
+        ozet['alis_guncel_deger'] = alis_float
+        ozet['satis_guncel_deger'] = satis_float
+
+        if yatirim_float > 0:
+            ozet['alis_kar_zarar'] = alis_float - yatirim_float
+            ozet['satis_kar_zarar'] = satis_float - yatirim_float
+            ozet['alis_kar_zarar_yuzde'] = (ozet['alis_kar_zarar'] / yatirim_float * 100)
+            ozet['satis_kar_zarar_yuzde'] = (ozet['satis_kar_zarar'] / yatirim_float * 100)
+
+    altin_doviz_yatirim_float = altin_ozet['yatirim'] + doviz_ozet['yatirim']
+    altin_doviz_alis = {
+        'guncel_deger': altin_ozet['alis_guncel_deger'] + doviz_ozet['alis_guncel_deger'],
+        'kar_zarar': altin_ozet['alis_kar_zarar'] + doviz_ozet['alis_kar_zarar'],
+        'kar_zarar_yuzde': 0.0
+    }
+    altin_doviz_satis = {
+        'guncel_deger': altin_ozet['satis_guncel_deger'] + doviz_ozet['satis_guncel_deger'],
+        'kar_zarar': altin_ozet['satis_kar_zarar'] + doviz_ozet['satis_kar_zarar'],
+        'kar_zarar_yuzde': 0.0
+    }
+    if altin_doviz_yatirim_float > 0:
         altin_doviz_alis['kar_zarar_yuzde'] = (altin_doviz_alis['kar_zarar'] / altin_doviz_yatirim_float * 100)
-        altin_doviz_satis['guncel_deger'] = float(altin_doviz_satis['guncel_deger'])
-        altin_doviz_satis['kar_zarar'] = altin_doviz_satis['guncel_deger'] - altin_doviz_yatirim_float
         altin_doviz_satis['kar_zarar_yuzde'] = (altin_doviz_satis['kar_zarar'] / altin_doviz_yatirim_float * 100)
-    else:
-        altin_doviz_yatirim_float = 0.0
-        altin_doviz_alis['guncel_deger'] = 0.0
-        altin_doviz_satis['guncel_deger'] = 0.0
+    fon_ozet['stopajli_net_deger'] = fon_ozet['stopajsiz_toplam_deger'] - fon_ozet['toplam_stopaj_yuku']
 
     kategori_dagilim = {k: float(v) for k, v in kategori_dagilim.items()}
 
@@ -1223,6 +1265,9 @@ def hesapla_portfoy_ozeti(yatirimlar):
         'kar_zarar_yuzde': kar_zarar_yuzde,
         'kategori_dagilim': kategori_dagilim,
         'tip_ozet': tip_ozet,
+        'altin_ozet': altin_ozet,
+        'doviz_ozet': doviz_ozet,
+        'fon_ozet': fon_ozet,
         'altin_doviz_yatirim': altin_doviz_yatirim_float,
         'altin_doviz_alis': altin_doviz_alis,
         'altin_doviz_satis': altin_doviz_satis
@@ -1420,6 +1465,9 @@ def index():
     kar_zarar_yuzde = ozet['kar_zarar_yuzde']
     kategori_dagilim = ozet['kategori_dagilim']
     tip_ozet = ozet['tip_ozet']
+    altin_ozet = ozet['altin_ozet']
+    doviz_ozet = ozet['doviz_ozet']
+    fon_ozet = ozet['fon_ozet']
     altin_doviz_yatirim_float = ozet['altin_doviz_yatirim']
     altin_doviz_alis = ozet['altin_doviz_alis']
     altin_doviz_satis = ozet['altin_doviz_satis']
@@ -1513,10 +1561,13 @@ def index():
                          grafik_html=grafik_html,
                          performans_grafik_html=performans_grafik_html,
                          performans_period_key=selected_period_key,
-                         performans_period_label=selected_period_label,
-                         altin_doviz_yatirim=altin_doviz_yatirim_float,
-                         altin_doviz_alis=altin_doviz_alis,
-                         altin_doviz_satis=altin_doviz_satis)
+                          performans_period_label=selected_period_label,
+                          altin_ozet=altin_ozet,
+                          doviz_ozet=doviz_ozet,
+                          fon_ozet=fon_ozet,
+                          altin_doviz_yatirim=altin_doviz_yatirim_float,
+                          altin_doviz_alis=altin_doviz_alis,
+                          altin_doviz_satis=altin_doviz_satis)
 
 
 @app.route('/stopaj')
@@ -2269,6 +2320,9 @@ def export_portfolio_pdf():
         kar_zarar = ozet['kar_zarar']
         kar_zarar_yuzde = ozet['kar_zarar_yuzde']
         kategori_dagilim = ozet['kategori_dagilim']
+        altin_ozet = ozet['altin_ozet']
+        doviz_ozet = ozet['doviz_ozet']
+        fon_ozet = ozet['fon_ozet']
         altin_doviz_yatirim_float = ozet['altin_doviz_yatirim']
         altin_doviz_alis = ozet['altin_doviz_alis']
         altin_doviz_satis = ozet['altin_doviz_satis']
@@ -2282,7 +2336,7 @@ def export_portfolio_pdf():
             <title>Portföy Raporu</title>
             <style>
                 @page {{
-                    size: A4;
+                    size: A4 landscape;
                     margin: 2cm;
                 }}
                 body {{
@@ -2428,56 +2482,103 @@ def export_portfolio_pdf():
             </div>
         """
         
-        # Altın ve Döviz için alış/satış fiyatları bölümü ekle
-        if altin_doviz_yatirim_float > 0:
+        # Altın, Döviz ve Fon için ayrı özet kartları
+        if altin_ozet['yatirim'] > 0:
             html_content += f"""
             <div class="summary" style="border-left: 4px solid #ffc107;">
-                <h3 style="color: #ffc107;">Altın & Döviz - Alış/Satış Fiyatları Karşılaştırması</h3>
-                <div class="summary-grid">
-                    <div>
-                        <div class="summary-item">
-                            <span>Toplam Yatırım:</span>
-                            <span>₺{altin_doviz_yatirim_float:,.2f}</span>
-                        </div>
-                    </div>
-                    <div style="grid-column: span 2;">
-                        <table style="margin-top: 0; font-size: 11px;">
-                            <thead>
-                                <tr>
-                                    <th>Hesaplama Türü</th>
-                                    <th>Güncel Değer</th>
-                                    <th>Kar/Zarar</th>
-                                    <th>Getiri %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>Alış Fiyatından</strong></td>
-                                    <td class="text-right">₺{altin_doviz_alis['guncel_deger']:,.2f}</td>
-                                    <td class="text-right {'text-success' if altin_doviz_alis['kar_zarar'] >= 0 else 'text-danger'}">
-                                        ₺{altin_doviz_alis['kar_zarar']:+,.2f}
-                                    </td>
-                                    <td class="text-right {'text-success' if altin_doviz_alis['kar_zarar_yuzde'] >= 0 else 'text-danger'}">
-                                        %{altin_doviz_alis['kar_zarar_yuzde']:+.2f}
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Satış Fiyatından</strong></td>
-                                    <td class="text-right">₺{altin_doviz_satis['guncel_deger']:,.2f}</td>
-                                    <td class="text-right {'text-success' if altin_doviz_satis['kar_zarar'] >= 0 else 'text-danger'}">
-                                        ₺{altin_doviz_satis['kar_zarar']:+,.2f}
-                                    </td>
-                                    <td class="text-right {'text-success' if altin_doviz_satis['kar_zarar_yuzde'] >= 0 else 'text-danger'}">
-                                        %{altin_doviz_satis['kar_zarar_yuzde']:+.2f}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <p style="margin-top: 10px; font-size: 9px; color: #666; font-style: italic;">
-                    Not: Altın ve Döviz yatırımlarınız için alış ve satış fiyatlarından hesaplanan değerler yukarıda ayrı ayrı gösterilmektedir.
-                </p>
+                <h3 style="color: #ffc107;">Altın - Alış/Satış Özeti</h3>
+                <table style="margin-top: 8px; font-size: 10px;">
+                    <thead>
+                        <tr>
+                            <th>Kalem</th>
+                            <th>Toplam Yatırım</th>
+                            <th>Toplam Değer</th>
+                            <th>Kar/Zarar</th>
+                            <th>Getiri %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Alış Bazlı</strong></td>
+                            <td class="text-right">₺{altin_ozet['yatirim']:,.2f}</td>
+                            <td class="text-right">₺{altin_ozet['alis_guncel_deger']:,.2f}</td>
+                            <td class="text-right {'text-success' if altin_ozet['alis_kar_zarar'] >= 0 else 'text-danger'}">₺{altin_ozet['alis_kar_zarar']:+,.2f}</td>
+                            <td class="text-right {'text-success' if altin_ozet['alis_kar_zarar_yuzde'] >= 0 else 'text-danger'}">%{altin_ozet['alis_kar_zarar_yuzde']:+.2f}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Satış Bazlı</strong></td>
+                            <td class="text-right">₺{altin_ozet['yatirim']:,.2f}</td>
+                            <td class="text-right">₺{altin_ozet['satis_guncel_deger']:,.2f}</td>
+                            <td class="text-right {'text-success' if altin_ozet['satis_kar_zarar'] >= 0 else 'text-danger'}">₺{altin_ozet['satis_kar_zarar']:+,.2f}</td>
+                            <td class="text-right {'text-success' if altin_ozet['satis_kar_zarar_yuzde'] >= 0 else 'text-danger'}">%{altin_ozet['satis_kar_zarar_yuzde']:+.2f}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            """
+
+        if doviz_ozet['yatirim'] > 0:
+            html_content += f"""
+            <div class="summary" style="border-left: 4px solid #17a2b8;">
+                <h3 style="color: #17a2b8;">Döviz - Alış/Satış Özeti</h3>
+                <table style="margin-top: 8px; font-size: 10px;">
+                    <thead>
+                        <tr>
+                            <th>Kalem</th>
+                            <th>Toplam Yatırım</th>
+                            <th>Toplam Değer</th>
+                            <th>Kar/Zarar</th>
+                            <th>Getiri %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Alış Bazlı</strong></td>
+                            <td class="text-right">₺{doviz_ozet['yatirim']:,.2f}</td>
+                            <td class="text-right">₺{doviz_ozet['alis_guncel_deger']:,.2f}</td>
+                            <td class="text-right {'text-success' if doviz_ozet['alis_kar_zarar'] >= 0 else 'text-danger'}">₺{doviz_ozet['alis_kar_zarar']:+,.2f}</td>
+                            <td class="text-right {'text-success' if doviz_ozet['alis_kar_zarar_yuzde'] >= 0 else 'text-danger'}">%{doviz_ozet['alis_kar_zarar_yuzde']:+.2f}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Satış Bazlı</strong></td>
+                            <td class="text-right">₺{doviz_ozet['yatirim']:,.2f}</td>
+                            <td class="text-right">₺{doviz_ozet['satis_guncel_deger']:,.2f}</td>
+                            <td class="text-right {'text-success' if doviz_ozet['satis_kar_zarar'] >= 0 else 'text-danger'}">₺{doviz_ozet['satis_kar_zarar']:+,.2f}</td>
+                            <td class="text-right {'text-success' if doviz_ozet['satis_kar_zarar_yuzde'] >= 0 else 'text-danger'}">%{doviz_ozet['satis_kar_zarar_yuzde']:+.2f}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            """
+
+        if fon_ozet['kayit_sayisi'] > 0:
+            html_content += f"""
+            <div class="summary" style="border-left: 4px solid #0d6efd;">
+                <h3 style="color: #0d6efd;">Fon - Stopajlı/Stopajsız Özet</h3>
+                <table style="margin-top: 8px; font-size: 10px;">
+                    <thead>
+                        <tr>
+                            <th>Kalem</th>
+                            <th>Stopajsız</th>
+                            <th>Stopaj Yükü</th>
+                            <th>Stopajlı (Net)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Toplam Fon Değeri</strong></td>
+                            <td class="text-right">₺{fon_ozet['stopajsiz_toplam_deger']:,.2f}</td>
+                            <td class="text-right">₺{fon_ozet['toplam_stopaj_yuku']:,.2f}</td>
+                            <td class="text-right">₺{fon_ozet['stopajli_net_deger']:,.2f}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Toplam Kar/Zarar</strong></td>
+                            <td class="text-right {'text-success' if fon_ozet['stopajsiz_toplam_kar'] >= 0 else 'text-danger'}">₺{fon_ozet['stopajsiz_toplam_kar']:+,.2f}</td>
+                            <td class="text-right">₺{fon_ozet['toplam_stopaj_yuku']:,.2f}</td>
+                            <td class="text-right {'text-success' if fon_ozet['stopajli_toplam_net_kar'] >= 0 else 'text-danger'}">₺{fon_ozet['stopajli_toplam_net_kar']:+,.2f}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
             """
         
@@ -2515,13 +2616,23 @@ def export_portfolio_pdf():
                         <th>Toplam Değer</th>
                         <th>Kar/Zarar</th>
                         <th>Getiri %</th>
+                        <th>Stopaj %</th>
+                        <th>Stopaj Yükü</th>
+                        <th>Net Kar</th>
                     </tr>
                 </thead>
                 <tbody>
             """
             
+            toplam_stopaj_yuku = 0.0
+            toplam_net_kar = 0.0
+            fon_stopajli_kayit_sayisi = 0
+
             for yatirim in yatirimlar:
                 alis_tutari = float(yatirim.alis_fiyati * yatirim.miktar)
+                stopaj_oran_str = "-"
+                stopaj_tutar_str = "-"
+                net_kar_str = "-"
                 
                 if yatirim.guncel_fiyat and yatirim.guncel_fiyat > 0:
                     guncel_tutar = float(yatirim.guncel_fiyat * yatirim.miktar)
@@ -2540,6 +2651,16 @@ def export_portfolio_pdf():
                     guncel_tutar_str = f"₺{alis_tutari:,.2f}"
                     kar_zarar_str = "-"
                     getiri_str = "-"
+
+                if yatirim.tip == 'fon':
+                    stopaj = stopaj_hesapla(yatirim)
+                    stopaj_oran_str = f"%{float(stopaj['stopaj_orani']):.2f}" if stopaj['stopaj_orani'] is not None else "Bilinmiyor"
+                    stopaj_tutar_str = f"₺{float(stopaj['stopaj_tutari']):,.2f}" if stopaj['stopaj_orani'] is not None else "-"
+                    net_kar_str = f"₺{float(stopaj['net_kar']):+,.2f}" if stopaj['stopaj_orani'] is not None else "-"
+                    if stopaj['stopaj_orani'] is not None:
+                        toplam_stopaj_yuku += float(stopaj['stopaj_tutari'])
+                        toplam_net_kar += float(stopaj['net_kar'])
+                        fon_stopajli_kayit_sayisi += 1
                 
                 html_content += f"""
                     <tr>
@@ -2555,6 +2676,9 @@ def export_portfolio_pdf():
                         <td class="text-right">{guncel_tutar_str}</td>
                         <td class="text-right {kar_zarar_class}">{kar_zarar_str}</td>
                         <td class="text-right {getiri_class}">{getiri_str}</td>
+                        <td class="text-right">{stopaj_oran_str}</td>
+                        <td class="text-right">{stopaj_tutar_str}</td>
+                        <td class="text-right">{net_kar_str}</td>
                     </tr>
                 """
             
@@ -2571,6 +2695,9 @@ def export_portfolio_pdf():
                         <td class="text-right {'text-success' if kar_zarar_yuzde >= 0 else 'text-danger'}">
                             <strong>%{kar_zarar_yuzde:+.2f}</strong>
                         </td>
+                        <td class="text-right">{'-' if fon_stopajli_kayit_sayisi == 0 else 'Hesaplandı'}</td>
+                        <td class="text-right"><strong>{'-' if fon_stopajli_kayit_sayisi == 0 else f'₺{toplam_stopaj_yuku:,.2f}'}</strong></td>
+                        <td class="text-right {'text-success' if toplam_net_kar >= 0 else 'text-danger'}"><strong>{'-' if fon_stopajli_kayit_sayisi == 0 else f'₺{toplam_net_kar:+,.2f}'}</strong></td>
                     </tr>
                 </tbody>
             </table>
@@ -2584,6 +2711,9 @@ def export_portfolio_pdf():
             """
         
         html_content += """
+        <p style="margin-top: 12px; font-size: 9px; color: #666; font-style: italic;">
+            * Stopaj hesaplamaları tahminidir. Kesin tutar aracı kurum tarafından belirlenir.
+        </p>
         </body>
         </html>
         """
@@ -2612,3 +2742,8 @@ def export_portfolio_pdf():
 
 # if __name__ == '__main__':
 #     app.run(host='0.0.0.0', port=5000, debug=True)
+
+
+
+
+
