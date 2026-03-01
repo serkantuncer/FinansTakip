@@ -118,7 +118,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 csrf = CSRFProtect(app)
 
 # Import and initialize database from models
-from models import db, User, Yatirim, FiyatGecmisi, StopajOrani
+from models import db, User, Yatirim, FiyatGecmisi, StopajOrani, SatisIslemi
 from werkzeug.security import generate_password_hash
 
 db.init_app(app)
@@ -156,6 +156,8 @@ def init_database():
             # Check if we need to migrate existing data
             migrate_existing_data()
             stopaj_seed_data()
+            Yatirim.query.filter(Yatirim.durum == None).update({'durum': 'aktif'})  # noqa: E711
+            db.session.commit()
             migrate_fon_bilgileri()
             
         except Exception as e:

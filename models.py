@@ -34,6 +34,12 @@ class Yatirim(db.Model):
     son_guncelleme = db.Column(db.DateTime)
     notlar = db.Column(db.Text)
     kategori = db.Column(db.String(30))
+    durum = db.Column(db.String(20), default='aktif', index=True)
+    # 'aktif' | 'tamamen_satildi'
+    # Kısmi satışlarda 'aktif' kalır, miktar azalır
+    # Tam satışta 'tamamen_satildi' olur, kayıt silinmez
+    alis_komisyon = db.Column(db.Numeric(precision=20, scale=6), default=0)
+    # Alışta ödenen komisyon — mevcut kayıtlar 0 kalır, ileriye dönük kullanım
 
     # Fon bilgisi alanlari - sadece tip='fon' icin kullanilir
     fon_grubu = db.Column(db.String(1), nullable=True)  # 'A','B','C','D' - stopaj grubu
@@ -64,6 +70,8 @@ class Yatirim(db.Model):
             'son_guncelleme': self.son_guncelleme.strftime('%Y-%m-%d %H:%M') if self.son_guncelleme else None,
             'notlar': self.notlar,
             'kategori': self.kategori,
+            'durum': self.durum,
+            'alis_komisyon': float(self.alis_komisyon or 0),
 
             'fon_grubu': self.fon_grubu,
             'fon_tur_kodu': self.fon_tur_kodu,
@@ -93,6 +101,65 @@ class StopajOrani(db.Model):
 
     def __repr__(self):
         return f'<StopajOrani Grup:{self.fon_grubu} {self.donem_baslangic} %{self.oran}>'
+
+
+class SatisIslemi(db.Model):
+    """
+    Her satış işlemi bir kayıt olarak saklanır.
+    Kısmi satışlarda aynı yatirim_id'ye birden fazla kayıt olabilir.
+    Tam satışlarda Yatirim.durum='tamamen_satildi' olur ama kayıt silinmez.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    yatirim_id = db.Column(db.Integer, db.ForeignKey('yatirim.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    satis_tarihi = db.Column(db.DateTime, nullable=False)
+    satis_fiyati = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
+    satilan_miktar = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
+
+    # Maliyet — FIFO veya manuel seçimle belirlenen alış fiyatı
+    alis_fiyati_baz = db.Column(db.Numeric(precision=20, scale=6), nullable=False)
+    fifo_mi = db.Column(db.Boolean, default=True)
+
+    # Masraflar
+    komisyon = db.Column(db.Numeric(precision=20, scale=6), default=0)
+    diger_masraf = db.Column(db.Numeric(precision=20, scale=6), default=0)
+    diger_masraf_aciklama = db.Column(db.String(200))
+
+    # Stopaj — otomatik hesaplanır, kullanıcı düzeltebilir
+    stopaj_orani = db.Column(db.Numeric(5, 2))
+    stopaj_tutari = db.Column(db.Numeric(precision=20, scale=6), default=0)
+    stopaj_manuel_mi = db.Column(db.Boolean, default=False)
+
+    # Hesaplanmış sonuçlar
+    brut_kar = db.Column(db.Numeric(precision=20, scale=6))
+    net_kar = db.Column(db.Numeric(precision=20, scale=6))
+
+    notlar = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # İlişkiler
+    yatirim = db.relationship('Yatirim', backref='satis_islemleri')
+    user = db.relationship('User', backref='satis_islemleri')
+
+    def __repr__(self):
+        return f'<SatisIslemi {self.yatirim_id} {self.satis_tarihi} x{self.satilan_miktar}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'yatirim_id': self.yatirim_id,
+            'satis_tarihi': self.satis_tarihi.strftime('%Y-%m-%d'),
+            'satis_fiyati': float(self.satis_fiyati),
+            'satilan_miktar': float(self.satilan_miktar),
+            'alis_fiyati_baz': float(self.alis_fiyati_baz),
+            'komisyon': float(self.komisyon or 0),
+            'diger_masraf': float(self.diger_masraf or 0),
+            'stopaj_orani': float(self.stopaj_orani) if self.stopaj_orani else None,
+            'stopaj_tutari': float(self.stopaj_tutari or 0),
+            'brut_kar': float(self.brut_kar) if self.brut_kar else None,
+            'net_kar': float(self.net_kar) if self.net_kar else None,
+            'notlar': self.notlar,
+        }
 
 
 class FiyatGecmisi(db.Model):
