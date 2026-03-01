@@ -2012,6 +2012,35 @@ def stopaj_simulasyon(yatirim_id):
     })
 
 
+@app.route('/api/stopaj_orani_ekle', methods=['POST'])
+@login_required
+def stopaj_orani_ekle():
+    """
+    Yeni bir stopaj oranı dönemi ekler.
+    Sadece admin kullanıcısı erişebilir.
+    """
+    if current_user.username != 'admin':
+        return jsonify({'error': 'Yetkisiz erişim'}), 403
+
+    data = request.get_json() or {}
+
+    try:
+        yeni_oran = StopajOrani(
+            fon_grubu=data['fon_grubu'],
+            donem_baslangic=datetime.strptime(data['donem_baslangic'], '%Y-%m-%d').date(),
+            donem_bitis=datetime.strptime(data['donem_bitis'], '%Y-%m-%d').date() if data.get('donem_bitis') else None,
+            elde_tutma_gun=data.get('elde_tutma_gun'),
+            oran=Decimal(str(data['oran'])),
+            aciklama=data.get('aciklama', '')
+        )
+        db.session.add(yeni_oran)
+        db.session.commit()
+        return jsonify({'success': True, 'id': yeni_oran.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
 @app.route('/api/yatirim_grup/<kod>')
 @login_required
 def api_yatirim_grup(kod):
