@@ -2360,6 +2360,142 @@ def stopaj_orani_ekle():
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
+@app.route('/api/satis_onizle/<int:yatirim_id>', methods=['POST'])
+@login_required
+def satis_onizle(yatirim_id):
+    """
+    Satış formundan gelen verilerle hesaplama yapar, DB'ye yazmaz.
+    """
+    yatirim = Yatirim.query.get_or_404(yatirim_id)
+    if yatirim.user_id != current_user.id:
+        return jsonify({'error': 'Yetkisiz erişim'}), 403
+
+    data = request.get_json() or {}
+
+    try:
+        satilan_miktar = Decimal(str(data['satilan_miktar']))
+        satis_fiyati = Decimal(str(data['satis_fiyati']))
+        satis_tarihi = datetime.strptime(data['satis_tarihi'], '%Y-%m-%d')
+        komisyon = Decimal(str(data.get('komisyon', 0)))
+        diger_masraf = Decimal(str(data.get('diger_masraf', 0)))
+        stopaj_manuel = Decimal(str(data['stopaj_manuel'])) if data.get('stopaj_manuel_mi') else None
+
+        hesap = satis_hesapla(
+            yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
+            komisyon, diger_masraf, stopaj_manuel
+        )
+
+        if 'hata' in hesap:
+            return jsonify({'success': False, 'error': hesap['hata']}), 400
+
+        return jsonify({
+            'success': True,
+            'alis_fiyati_baz': float(hesap['alis_fiyati_baz']),
+            'satis_tutari': float(hesap['satis_tutari']),
+            'alis_tutari': float(hesap['alis_tutari']),
+            'brut_kar': float(hesap['brut_kar']),
+            'stopaj_orani': float(hesap['stopaj_orani']),
+            'stopaj_tutari': float(hesap['stopaj_tutari']),
+            'komisyon': float(hesap['komisyon']),
+            'diger_masraf': float(hesap['diger_masraf']),
+            'toplam_masraf': float(hesap['toplam_masraf']),
+            'net_kar': float(hesap['net_kar']),
+            'kalan_miktar': float(hesap['kalan_miktar']),
+            'tam_satis_mi': hesap['tam_satis_mi'],
+            'fifo_detay': hesap['fifo_detay'],
+            'mevcut_miktar': float(yatirim.miktar),
+        })
+
+    except (InvalidOperation, ValueError) as e:
+        return jsonify({'success': False, 'error': f'Geçersiz değer: {str(e)}'}), 400
+
+
+@app.route('/satis_yap/<int:yatirim_id>', methods=['POST'])
+@login_required
+def satis_yap(yatirim_id):
+    """Satış işlemini onaylayıp kaydeder."""
+    yatirim = Yatirim.query.get_or_404(yatirim_id)
+    if yatirim.user_id != current_user.id:
+        flash('Bu yatırıma erişim yetkiniz yok!', 'danger')
+        return redirect(url_for('yatirimlar'))
+
+    try:
+        satilan_miktar = Decimal(request.form['satilan_miktar'].replace(',', '.'))
+        satis_fiyati = Decimal(request.form['satis_fiyati'].replace(',', '.'))
+        satis_tarihi = datetime.strptime(request.form['satis_tarihi'], '%Y-%m-%d')
+        komisyon = Decimal(request.form.get('komisyon', '0').replace(',', '.'))
+        diger_masraf = Decimal(request.form.get('diger_masraf', '0').replace(',', '.'))
+        diger_masraf_aciklama = request.form.get('diger_masraf_aciklama', '')
+        stopaj_tutari = Decimal(request.form.get('stopaj_tutari', '0').replace(',', '.'))
+        stopaj_manuel_mi = request.form.get('stopaj_manuel_mi') == 'true'
+        notlar = request.form.get('notlar', '')
+
+        basarili, sonuc = satis_kaydet(
+            yatirim=yatirim,
+            satilan_miktar=satilan_miktar,
+            satis_fiyati=satis_fiyati,
+            satis_tarihi=satis_tarihi,
+            komisyon=komisyon,
+            diger_masraf=diger_masraf,
+            diger_masraf_aciklama=diger_masraf_aciklama,
+            stopaj_tutari=stopaj_tutari,
+            stopaj_manuel_mi=stopaj_manuel_mi,
+            notlar=notlar,
+        )
+
+        if basarili:
+            if yatirim.durum == 'tamamen_satildi':
+                flash(f'{yatirim.kod} tamamen satıldı. Net kâr: ₺{float(sonuc.net_kar):+,.2f}', 'success')
+            else:
+                flash(f'{yatirim.kod} kısmi satış tamamlandı. Kalan: {float(yatirim.miktar):,.4f}', 'success')
+        else:
+            flash(f'Satış hatası: {sonuc}', 'danger')
+
+    except Exception as e:
+        flash(f'Satış işlemi sırasında hata: {str(e)}', 'danger')
+
+    return redirect(url_for('yatirimlar'))
+
+
+@app.route('/satislar')
+@login_required
+def satislar():
+    """Tüm satış işlemlerinin geçmiş sayfası."""
+    tip_filter = request.args.get('tip', '')
+    tarih_baslangic = request.args.get('tarih_baslangic', '')
+    tarih_bitis = request.args.get('tarih_bitis', '')
+
+    query = db.session.query(SatisIslemi).join(Yatirim).filter(
+        SatisIslemi.user_id == current_user.id
+    )
+
+    if tip_filter:
+        query = query.filter(Yatirim.tip == tip_filter)
+    if tarih_baslangic:
+        query = query.filter(SatisIslemi.satis_tarihi >= datetime.strptime(tarih_baslangic, '%Y-%m-%d'))
+    if tarih_bitis:
+        query = query.filter(SatisIslemi.satis_tarihi <= datetime.strptime(tarih_bitis, '%Y-%m-%d'))
+
+    satislar_listesi = query.order_by(SatisIslemi.satis_tarihi.desc()).all()
+
+    toplam_brut_kar = sum(float(s.brut_kar or 0) for s in satislar_listesi)
+    toplam_net_kar = sum(float(s.net_kar or 0) for s in satislar_listesi)
+    toplam_stopaj = sum(float(s.stopaj_tutari or 0) for s in satislar_listesi)
+    toplam_komisyon = sum(float(s.komisyon or 0) for s in satislar_listesi)
+    toplam_masraf = sum(float(s.diger_masraf or 0) for s in satislar_listesi)
+
+    return render_template(
+        'satislar.html',
+        satislar=satislar_listesi,
+        toplam_brut_kar=toplam_brut_kar,
+        toplam_net_kar=toplam_net_kar,
+        toplam_stopaj=toplam_stopaj,
+        toplam_komisyon=toplam_komisyon,
+        toplam_masraf=toplam_masraf,
+        tip_filter=tip_filter,
+    )
+
+
 @app.route('/api/yatirim_grup/<kod>')
 @login_required
 def api_yatirim_grup(kod):

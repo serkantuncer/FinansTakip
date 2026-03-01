@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Satış Geçmişi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="mb-0"><i class="fas fa-history me-2"></i>Satış Geçmişi</h2>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="card h-100"><div class="card-body"><small class="text-muted">Toplam Satış</small><div class="h5 mb-0">{{ satislar|length }}</div></div></div>
+        </div>
+        <div class="col-md-2">
+            <div class="card h-100"><div class="card-body"><small class="text-muted">Toplam Brüt Kar</small><div class="h5 mb-0 {% if toplam_brut_kar >= 0 %}text-success{% else %}text-danger{% endif %}">₺{{ "{:+,.2f}".format(toplam_brut_kar) }}</div></div></div>
+        </div>
+        <div class="col-md-2">
+            <div class="card h-100"><div class="card-body"><small class="text-muted">Toplam Stopaj</small><div class="h5 mb-0 text-danger">₺{{ "{:,.2f}".format(toplam_stopaj) }}</div></div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100"><div class="card-body"><small class="text-muted">Komisyon + Masraf</small><div class="h5 mb-0 text-warning">₺{{ "{:,.2f}".format(toplam_komisyon + toplam_masraf) }}</div></div></div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100"><div class="card-body"><small class="text-muted">Toplam Net Kar</small><div class="h4 mb-0 {% if toplam_net_kar >= 0 %}text-success{% else %}text-danger{% endif %}">₺{{ "{:+,.2f}".format(toplam_net_kar) }}</div></div></div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-2">
+                <div class="col-md-3">
+                    <select class="form-select" name="tip">
+                        <option value="">Tüm Tipler</option>
+                        <option value="fon" {{ 'selected' if tip_filter == 'fon' else '' }}>Fon</option>
+                        <option value="hisse" {{ 'selected' if tip_filter == 'hisse' else '' }}>Hisse</option>
+                        <option value="altin" {{ 'selected' if tip_filter == 'altin' else '' }}>Altın</option>
+                        <option value="doviz" {{ 'selected' if tip_filter == 'doviz' else '' }}>Döviz</option>
+                    </select>
+                </div>
+                <div class="col-md-3"><input type="date" class="form-control" name="tarih_baslangic" value="{{ request.args.get('tarih_baslangic','') }}"></div>
+                <div class="col-md-3"><input type="date" class="form-control" name="tarih_bitis" value="{{ request.args.get('tarih_bitis','') }}"></div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary w-100" type="submit">Filtrele</button>
+                    <a class="btn btn-outline-secondary" href="{{ url_for('satislar') }}">Sıfırla</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Kod / İsim</th>
+                            <th>Tip</th>
+                            <th>Satılan</th>
+                            <th>Alış Baz</th>
+                            <th>Satış Fiyatı</th>
+                            <th>Brüt Kar</th>
+                            <th>Stopaj</th>
+                            <th>Kom+Masraf</th>
+                            <th>Net Kar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for satis in satislar %}
+                        <tr>
+                            <td>{{ satis.satis_tarihi.strftime('%d.%m.%Y') }}</td>
+                            <td><strong>{{ satis.yatirim.kod if satis.yatirim else '-' }}</strong><br><small class="text-muted">{{ satis.yatirim.isim if satis.yatirim else '-' }}</small></td>
+                            <td><span class="badge bg-secondary">{{ (satis.yatirim.tip if satis.yatirim else '-')|upper }}</span></td>
+                            <td>{{ "{:,.4f}".format(satis.satilan_miktar) }}</td>
+                            <td>₺{{ "{:,.4f}".format(satis.alis_fiyati_baz) }}</td>
+                            <td>₺{{ "{:,.4f}".format(satis.satis_fiyati) }}</td>
+                            <td class="{% if (satis.brut_kar or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">₺{{ "{:+,.2f}".format(satis.brut_kar or 0) }}</td>
+                            <td>₺{{ "{:,.2f}".format(satis.stopaj_tutari or 0) }}</td>
+                            <td>₺{{ "{:,.2f}".format((satis.komisyon or 0) + (satis.diger_masraf or 0)) }}</td>
+                            <td class="fw-bold {% if (satis.net_kar or 0) >= 0 %}text-success{% else %}text-danger{% endif %}">₺{{ "{:+,.2f}".format(satis.net_kar or 0) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="10" class="text-center py-4 text-muted">Kayıt bulunamadı.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
