@@ -143,7 +143,7 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <div class="btn-group" role="group">
+                                            <div class="action-buttons" role="group">
                                                 {% if grup.kalem_sayisi == 1 %}
                                                     <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=grup.kalemler[0]['id']) }}" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -159,6 +159,18 @@
                                                             data-bs-toggle="modal" data-bs-target="#silModal{{ grup.kalemler[0]['id'] }}" title="Sil">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
+                                                    {% if grup.tip in ['fon', 'altin', 'doviz'] and grup.kalemler[0]['durum'] == 'aktif' %}
+                                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                                            onclick="satisModalAc('{{ grup.kod }}', '{{ grup.tip }}')" title="Sat">
+                                                        <i class="fas fa-hand-holding-usd"></i>
+                                                    </button>
+                                                    {% endif %}
+                                                    {% if grup.tip in ['altin', 'doviz'] and grup.kalemler[0]['durum'] == 'aktif' %}
+                                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                                            onclick="satisModalAc('{{ grup.kod }}', '{{ grup.tip }}')" title="Toplu Sat">
+                                                        <i class="fas fa-layer-group"></i>
+                                                    </button>
+                                                    {% endif %}
                                                 {% else %}
                                                     <button class="btn btn-outline-info btn-sm" type="button" 
                                                             data-bs-toggle="modal" data-bs-target="#detailModal" 
@@ -166,6 +178,12 @@
                                                             title="Kalem Detayları">
                                                         <i class="fas fa-list-ul"></i>
                                                     </button>
+                                                    {% if grup.tip in ['altin', 'doviz'] %}
+                                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                                            onclick="satisModalAc('{{ grup.kod }}', '{{ grup.tip }}')" title="Toplu Sat">
+                                                        <i class="fas fa-hand-holding-usd"></i>
+                                                    </button>
+                                                    {% endif %}
                                                 {% endif %}
                                             </div>
                                         </td>
@@ -220,7 +238,7 @@
                                     <span class="{% if grup.ortalama_getiri >= 0 %}text-success{% else %}text-danger{% endif %}">
                                         {{ "{:+.2f}".format(grup.ortalama_getiri) }}%
                                     </span>
-                                    <div class="btn-group" role="group">
+                                    <div class="action-buttons" role="group">
                                         {% if grup.kalem_sayisi == 1 %}
                                             <form method="POST" action="{{ url_for('fiyat_guncelle_route', yatirim_id=grup.kalemler[0]['id']) }}" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -236,6 +254,18 @@
                                                     data-bs-toggle="modal" data-bs-target="#silModal{{ grup.kalemler[0]['id'] }}">
                                                 <i class="fas fa-trash"></i>
                                             </button>
+                                            {% if grup.tip in ['fon', 'altin', 'doviz'] and grup.kalemler[0]['durum'] == 'aktif' %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    onclick="satisModalAc('{{ grup.kod }}', '{{ grup.tip }}')" title="Sat">
+                                                <i class="fas fa-hand-holding-usd"></i>
+                                            </button>
+                                            {% endif %}
+                                            {% if grup.tip in ['altin', 'doviz'] and grup.kalemler[0]['durum'] == 'aktif' %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    onclick="satisModalAc('{{ grup.kod }}', '{{ grup.tip }}')" title="Toplu Sat">
+                                                <i class="fas fa-layer-group"></i>
+                                            </button>
+                                            {% endif %}
                                         {% else %}
                                             <button class="btn btn-outline-info btn-sm" type="button" 
                                                     data-bs-toggle="modal" data-bs-target="#detailModal" 
@@ -243,6 +273,12 @@
                                                 title="Kalem Detayları">
                                                 <i class="fas fa-list-ul"></i>
                                             </button>
+                                            {% if grup.tip in ['altin', 'doviz'] %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    onclick="satisModalAc('{{ grup.kod }}', '{{ grup.tip }}')" title="Toplu Sat">
+                                                <i class="fas fa-hand-holding-usd"></i>
+                                            </button>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 </div>
@@ -263,6 +299,128 @@
             </div>
         </div>
     </div>
+</div>
+
+<div class="modal fade" id="satisModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-hand-holding-usd me-2"></i>
+          Satış Yap - <span id="satisModalBaslik"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="satisForm">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Mevcut Miktar</label>
+              <input type="text" class="form-control" id="mevcutMiktar" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Satış Tarihi *</label>
+              <input type="date" class="form-control" id="satisTarihi" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Satılacak Miktar *</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="satisMiktar" step="0.000001" min="0.000001" required>
+                <button type="button" class="btn btn-outline-secondary" onclick="tamaminiSat()">Tamamı</button>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Satış Fiyatı *</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="satisFiyati" step="0.000001" min="0.000001" required>
+                <button type="button" class="btn btn-outline-secondary" onclick="guncelFiyatiKullan()">Güncel</button>
+              </div>
+            </div>
+            <div class="col-md-6" id="komisyonAlani">
+              <label class="form-label">Komisyon</label>
+              <input type="number" class="form-control" id="satisKomisyon" step="0.000001" min="0" value="0">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Diğer Masraflar</label>
+              <input type="number" class="form-control" id="digerMasraf" step="0.000001" min="0" value="0">
+            </div>
+            <div class="col-12" id="digerMasrafAciklamaAlani" style="display:none;">
+              <label class="form-label">Diğer Masraf Açıklaması</label>
+              <input type="text" class="form-control" id="digerMasrafAciklama">
+            </div>
+            <div class="col-12" id="stopajAlani" style="display:none;">
+              <label class="form-label">Stopaj Tutarı</label>
+              <div class="row g-2">
+                <div class="col-md-8">
+                  <input type="number" class="form-control" id="stopajTutari" step="0.000001" min="0" value="0">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="stopajManuelMi">
+                    <label class="form-check-label" for="stopajManuelMi"><small>Manuel düzelt</small></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Notlar</label>
+              <textarea class="form-control" id="satisNotlar" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="mt-3 text-end">
+            <button type="button" class="btn btn-primary" onclick="satisOnizle()">
+              <i class="fas fa-calculator me-2"></i>Hesapla ve Önizle
+            </button>
+          </div>
+        </div>
+
+        <div id="satisOzet" style="display:none;">
+          <div class="alert alert-info">
+            <h6 class="alert-heading">Satış Özeti</h6>
+            <div class="row g-2">
+              <div class="col-6"><small class="satis-label">Satış Tutarı</small><div class="fw-bold" id="ozet_satis_tutari"></div></div>
+              <div class="col-6"><small class="satis-label">Alış Maliyeti</small><div class="fw-bold" id="ozet_alis_tutari"></div></div>
+              <div class="col-6"><small class="satis-label">Brüt Kâr/Zarar</small><div class="fw-bold" id="ozet_brut_kar"></div></div>
+              <div class="col-6"><small class="satis-label">Stopaj</small><div class="fw-bold text-warning" id="ozet_stopaj"></div></div>
+              <div class="col-6"><small class="satis-label">Komisyon + Masraf</small><div class="fw-bold text-warning" id="ozet_masraf"></div></div>
+              <div class="col-6"><small class="satis-label">Kalan Bakiye</small><div class="fw-bold" id="ozet_kalan"></div></div>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fs-6">NET KÂR / ZARAR</span>
+              <span class="fs-4 fw-bold" id="ozet_net_kar"></span>
+            </div>
+          </div>
+          <div id="fifoDetayAlani" style="display:none;">
+            <small class="satis-label">FIFO - Kullanılan alış kayıtları:</small>
+            <div id="fifoDetay" class="small"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+        <button type="button" class="btn btn-outline-primary" id="geriDonBtn" onclick="satisGeriDon()" style="display:none;">
+          <i class="fas fa-arrow-left me-1"></i>Geri
+        </button>
+        <form id="satisOnayForm" method="POST" style="display:none;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="satilan_miktar" id="form_satilan_miktar">
+          <input type="hidden" name="satis_fiyati" id="form_satis_fiyati">
+          <input type="hidden" name="satis_tarihi" id="form_satis_tarihi">
+          <input type="hidden" name="komisyon" id="form_komisyon">
+          <input type="hidden" name="diger_masraf" id="form_diger_masraf">
+          <input type="hidden" name="diger_masraf_aciklama" id="form_diger_masraf_aciklama">
+          <input type="hidden" name="stopaj_tutari" id="form_stopaj_tutari">
+          <input type="hidden" name="stopaj_manuel_mi" id="form_stopaj_manuel_mi">
+          <input type="hidden" name="satis_modu" id="form_satis_modu" value="grup">
+          <input type="hidden" name="notlar" id="form_notlar">
+          <button type="submit" class="btn btn-danger">
+            <i class="fas fa-check me-2"></i>Satışı Onayla
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Add Investment Modal -->
@@ -463,10 +621,230 @@
 <script>
 // Global variable to store investment groups data
 let yatirimGroupsData = {};
+let aktifYatirimId = null;
+let aktifYatirimTip = null;
+let aktifGuncelFiyat = null;
+let aktifMevcut = null;
+let aktifSatisModu = 'grup';
 
 function csrfTokenAl() {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.getAttribute('content') : '';
+}
+
+function satisModaliniGoster() {
+    const detailModal = document.getElementById('detailModal');
+    if (detailModal && detailModal.classList.contains('show')) {
+        openModalOnTop('satisModal');
+        return;
+    }
+    new bootstrap.Modal(document.getElementById('satisModal')).show();
+}
+
+function satisModalAc(kod, tip) {
+    satisGeriDon();
+    fetch(`/api/yatirim_grup/${kod}`)
+        .then(r => r.json())
+        .then(data => {
+            const aktifKalemler = (data.kalemler || []).filter(k => (k.durum || 'aktif') === 'aktif');
+            const ilkKalem = aktifKalemler.length ? aktifKalemler[0] : (data.kalemler || [])[0];
+            if (!ilkKalem) { alert('Aktif satış yapılacak kalem bulunamadı.'); return; }
+
+            aktifYatirimId = ilkKalem.id;
+            aktifYatirimTip = tip;
+            aktifGuncelFiyat = ilkKalem.guncel_fiyat;
+            aktifMevcut = aktifKalemler.reduce((s, k) => s + (k.miktar || 0), 0) || ilkKalem.miktar || 0;
+            aktifSatisModu = 'grup';
+
+            document.getElementById('satisModalBaslik').textContent = kod;
+            document.getElementById('mevcutMiktar').value = Number(aktifMevcut).toFixed(6);
+            document.getElementById('satisTarihi').value = new Date().toISOString().split('T')[0];
+            document.getElementById('satisMiktar').value = '';
+            document.getElementById('satisFiyati').value = '';
+            document.getElementById('satisKomisyon').value = '0';
+            document.getElementById('digerMasraf').value = '0';
+            document.getElementById('digerMasrafAciklama').value = '';
+            document.getElementById('satisNotlar').value = '';
+            document.getElementById('stopajTutari').value = '0';
+            document.getElementById('stopajManuelMi').checked = false;
+            document.getElementById('digerMasrafAciklamaAlani').style.display = 'none';
+            document.getElementById('komisyonAlani').style.display = ['fon', 'hisse'].includes(tip) ? '' : 'none';
+            document.getElementById('stopajAlani').style.display = tip === 'fon' ? '' : 'none';
+            satisModaliniGoster();
+        })
+        .catch(err => alert('Satış modalı açılamadı: ' + err));
+}
+
+function satisModalAcKalem(kalemId, tip, kod, mevcutMiktar, guncelFiyat) {
+    satisGeriDon();
+    aktifYatirimId = Number(kalemId);
+    aktifYatirimTip = tip;
+    aktifGuncelFiyat = guncelFiyat;
+    aktifMevcut = Number(mevcutMiktar || 0);
+    aktifSatisModu = 'kalem';
+
+    document.getElementById('satisModalBaslik').textContent = `${kod} (Tek Kalem)`;
+    document.getElementById('mevcutMiktar').value = Number(aktifMevcut).toFixed(6);
+    document.getElementById('satisTarihi').value = new Date().toISOString().split('T')[0];
+    document.getElementById('satisMiktar').value = '';
+    document.getElementById('satisFiyati').value = '';
+    document.getElementById('satisKomisyon').value = '0';
+    document.getElementById('digerMasraf').value = '0';
+    document.getElementById('digerMasrafAciklama').value = '';
+    document.getElementById('satisNotlar').value = '';
+    document.getElementById('stopajTutari').value = '0';
+    document.getElementById('stopajManuelMi').checked = false;
+    document.getElementById('digerMasrafAciklamaAlani').style.display = 'none';
+    document.getElementById('komisyonAlani').style.display = ['fon', 'hisse'].includes(tip) ? '' : 'none';
+    document.getElementById('stopajAlani').style.display = tip === 'fon' ? '' : 'none';
+
+    satisModaliniGoster();
+}
+
+function guncelFiyatiKullan() {
+    if (aktifGuncelFiyat) document.getElementById('satisFiyati').value = Number(aktifGuncelFiyat).toFixed(6);
+}
+
+function tamaminiSat() {
+    document.getElementById('satisMiktar').value = Number(aktifMevcut || 0).toFixed(6);
+}
+
+function sayi(v, varsayilan = 0) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : varsayilan;
+}
+
+function satisHataGoster(mesaj) {
+    const ozetEl = document.getElementById('satisOzet');
+    if (!ozetEl) return;
+    ozetEl.innerHTML = `
+      <div class="alert alert-danger mb-0">
+        <strong>Önizleme alınamadı:</strong> ${mesaj || 'Bilinmeyen hata'}
+      </div>
+    `;
+    document.getElementById('satisForm').style.display = 'none';
+    ozetEl.style.display = 'block';
+    document.getElementById('satisOnayForm').style.display = 'none';
+    document.getElementById('geriDonBtn').style.display = 'inline-block';
+}
+
+function satisOnizle() {
+    const onizleBtn = document.querySelector('#satisForm button.btn.btn-primary');
+    const originalBtnHtml = onizleBtn ? onizleBtn.innerHTML : '';
+    if (onizleBtn) {
+        onizleBtn.disabled = true;
+        onizleBtn.innerHTML = "<i class='fas fa-spinner fa-spin me-2'></i>Hesaplanıyor...";
+    }
+
+    const payload = {
+        satilan_miktar: document.getElementById('satisMiktar').value,
+        satis_fiyati: document.getElementById('satisFiyati').value,
+        satis_tarihi: document.getElementById('satisTarihi').value,
+        komisyon: document.getElementById('satisKomisyon')?.value || 0,
+        diger_masraf: document.getElementById('digerMasraf').value || 0,
+        stopaj_manuel_mi: document.getElementById('stopajManuelMi')?.checked || false,
+        stopaj_manuel: document.getElementById('stopajManuelMi')?.checked ? document.getElementById('stopajTutari').value : null,
+        satis_modu: aktifSatisModu
+    };
+
+    fetch(`/api/satis_onizle/${aktifYatirimId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfTokenAl()
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(async (r) => {
+        let body = null;
+        try {
+            body = await r.json();
+        } catch (_e) {
+            const txt = await r.text();
+            throw new Error(`Sunucu JSON dönmedi (HTTP ${r.status}): ${txt.slice(0, 160)}`);
+        }
+        if (!r.ok) {
+            throw new Error(body?.error || `HTTP ${r.status}`);
+        }
+        return body;
+    })
+    .then(data => {
+        if (!data.success) {
+            satisHataGoster(data.error || 'Önizleme hatası');
+            return;
+        }
+
+        const fmt = v => '₺' + sayi(v).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const karClass = sayi(data.net_kar) >= 0 ? 'text-success' : 'text-danger';
+        const brutClass = sayi(data.brut_kar) >= 0 ? 'text-success' : 'text-danger';
+        const fifoHtml = (Array.isArray(data.fifo_detay) && data.fifo_detay.length > 1)
+            ? `<div class="mt-2"><small class="satis-label">FIFO - Kullanılan alış kayıtları:</small>
+                 <div class="small">${data.fifo_detay.map(f => {
+                     const d = String(f.alis_tarihi || '').split('T')[0];
+                     return `<span class="me-3">${d}: ${sayi(f.kullanilan_miktar).toFixed(6)} adet × ₺${sayi(f.alis_fiyati).toFixed(6)}</span>`;
+                 }).join('')}</div></div>`
+            : '';
+
+        const ozetEl = document.getElementById('satisOzet');
+        ozetEl.innerHTML = `
+          <div class="alert alert-info mb-0">
+            <h6 class="alert-heading">Satış Özeti</h6>
+            <div class="row g-2">
+              <div class="col-6"><small class="satis-label">Satış Tutarı</small><div class="fw-bold">${fmt(data.satis_tutari)}</div></div>
+              <div class="col-6"><small class="satis-label">Alış Maliyeti</small><div class="fw-bold">${fmt(data.alis_tutari)}</div></div>
+              <div class="col-6"><small class="satis-label">Brüt Kâr/Zarar</small><div class="fw-bold ${brutClass}">${fmt(data.brut_kar)}</div></div>
+              <div class="col-6"><small class="satis-label">Stopaj</small><div class="fw-bold text-warning">₺${sayi(data.stopaj_tutari).toFixed(2)} (%${sayi(data.stopaj_orani).toFixed(2)})</div></div>
+              <div class="col-6"><small class="satis-label">Komisyon + Masraf</small><div class="fw-bold text-warning">${fmt(sayi(data.komisyon) + sayi(data.diger_masraf))}</div></div>
+              <div class="col-6"><small class="satis-label">Kalan Bakiye</small><div class="fw-bold">${sayi(data.kalan_miktar).toFixed(6)}${data.tam_satis_mi ? ' (Tam Satış)' : ''}</div></div>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fs-6">NET KÂR / ZARAR</span>
+              <span class="fs-4 fw-bold ${karClass}">${fmt(data.net_kar)}</span>
+            </div>
+            ${fifoHtml}
+          </div>
+        `;
+
+        if (aktifYatirimTip === 'fon') {
+            document.getElementById('stopajTutari').value = sayi(data.stopaj_tutari).toFixed(6);
+        }
+
+        document.getElementById('form_satilan_miktar').value = payload.satilan_miktar;
+        document.getElementById('form_satis_fiyati').value = payload.satis_fiyati;
+        document.getElementById('form_satis_tarihi').value = payload.satis_tarihi;
+        document.getElementById('form_komisyon').value = payload.komisyon;
+        document.getElementById('form_diger_masraf').value = payload.diger_masraf;
+        document.getElementById('form_diger_masraf_aciklama').value = document.getElementById('digerMasrafAciklama')?.value || '';
+        document.getElementById('form_stopaj_tutari').value = payload.stopaj_manuel_mi ? (payload.stopaj_manuel || 0) : (data.stopaj_tutari || 0);
+        document.getElementById('form_stopaj_manuel_mi').value = payload.stopaj_manuel_mi ? 'true' : 'false';
+        document.getElementById('form_satis_modu').value = payload.satis_modu || 'grup';
+        document.getElementById('form_notlar').value = document.getElementById('satisNotlar').value || '';
+        document.getElementById('satisOnayForm').action = `/satis_yap/${aktifYatirimId}`;
+
+        document.getElementById('satisForm').style.display = 'none';
+        ozetEl.style.display = 'block';
+        document.getElementById('satisOnayForm').style.display = 'block';
+        document.getElementById('geriDonBtn').style.display = 'inline-block';
+    })
+    .catch(err => {
+        satisHataGoster(String(err));
+    })
+    .finally(() => {
+        if (onizleBtn) {
+            onizleBtn.disabled = false;
+            onizleBtn.innerHTML = originalBtnHtml;
+        }
+    });
+}
+
+function satisGeriDon() {
+    document.getElementById('satisForm').style.display = 'block';
+    const ozetEl = document.getElementById('satisOzet');
+    ozetEl.style.display = 'none';
+    ozetEl.innerHTML = '';
+    document.getElementById('satisOnayForm').style.display = 'none';
+    document.getElementById('geriDonBtn').style.display = 'none';
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -493,6 +871,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
+
+    const digerMasrafEl = document.getElementById('digerMasraf');
+    if (digerMasrafEl) {
+        digerMasrafEl.addEventListener('input', function() {
+            const alani = document.getElementById('digerMasrafAciklamaAlani');
+            if (alani) alani.style.display = parseFloat(this.value || '0') > 0 ? '' : 'none';
+        });
+    }
 });
 
 // Predefined investment codes for search
@@ -1608,7 +1994,9 @@ function openModalOnTop(targetModalId) {
     }
 
     // Keep the detail modal open and layer the new modal on top
-    targetModal.style.zIndex = '1070';
+    const topZ = targetModalId === 'satisModal' ? 1080 : 1070;
+    const topBackdropZ = topZ - 1;
+    targetModal.style.zIndex = String(topZ);
 
     // Create and show the target modal with higher z-index
     const targetModalInstance = new bootstrap.Modal(targetModal, {
@@ -1628,8 +2016,8 @@ function openModalOnTop(targetModalId) {
             if (backdrops.length >= 2) {
                 // First backdrop (detail modal) should be lower
                 backdrops[0].style.zIndex = '1054';
-                // Second backdrop (edit modal) should be higher
-                backdrops[1].style.zIndex = '1069';
+                // Second backdrop (top modal) should be higher
+                backdrops[1].style.zIndex = String(topBackdropZ);
 
                 console.log('Backdrop z-indexes set:', {
                     first: backdrops[0].style.zIndex,
@@ -1761,16 +2149,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 modalBody.innerHTML = '';
             }
 
-            // Clean up any remaining backdrop elements
+            // Clean up backdrops only if no modal remains open
             setTimeout(() => {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(backdrop => backdrop.remove());
-
-                // Re-enable page scrolling
-                document.body.classList.remove('modal-open');
-                document.body.style.removeProperty('overflow');
-                document.body.style.removeProperty('padding-right');
-                document.documentElement.style.removeProperty('overflow');
+                const openModals = document.querySelectorAll('.modal.show');
+                if (openModals.length === 0) {
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(backdrop => backdrop.remove());
+                    document.body.classList.remove('modal-open');
+                    document.body.style.removeProperty('overflow');
+                    document.body.style.removeProperty('padding-right');
+                    document.documentElement.style.removeProperty('overflow');
+                }
             }, 100);
         });
 
@@ -1788,16 +2177,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const allModals = document.querySelectorAll('.modal');
     allModals.forEach(function(modal) {
         modal.addEventListener('hidden.bs.modal', function() {
-            // Clean up backdrop elements
+            // Clean up only when all modals are closed
             setTimeout(() => {
-                const backdrops = document.querySelectorAll('.modal-backdrop');
-                backdrops.forEach(backdrop => backdrop.remove());
-
-                // Re-enable page interactions
-                document.body.classList.remove('modal-open');
-                document.body.style.removeProperty('overflow');
-                document.body.style.removeProperty('padding-right');
-                document.documentElement.style.removeProperty('overflow');
+                const openModals = document.querySelectorAll('.modal.show');
+                if (openModals.length === 0) {
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(backdrop => backdrop.remove());
+                    document.body.classList.remove('modal-open');
+                    document.body.style.removeProperty('overflow');
+                    document.body.style.removeProperty('padding-right');
+                    document.documentElement.style.removeProperty('overflow');
+                }
             }, 100);
         });
 
@@ -2073,7 +2463,7 @@ function showMultipleItemDetails(kod, kalemler) {
                         <td>${kalem.kategori || '-'}</td>
                         <td>${kalem.notlar || '-'}</td>
                         <td>
-                            <div class="btn-group" role="group">
+                            <div class="action-buttons action-buttons-inline" role="group">
                                 <button type="button" class="btn btn-outline-success btn-sm" 
                                         onclick="updatePriceAjax(${kalem.id})" 
                                         id="updateBtn${kalem.id}" 
@@ -2088,6 +2478,12 @@ function showMultipleItemDetails(kod, kalemler) {
                                         onclick="openModalOnTop('silModal${kalem.id}')" title="Sil">
                                     <i class="fas fa-trash"></i>
                                 </button>
+                                ${(['fon', 'altin', 'doviz'].includes(String(kalem.tip || '').toLowerCase()) && String(kalem.durum || 'aktif') === 'aktif') ? `
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        onclick="satisModalAcKalem(${kalem.id}, '${kalem.tip}', '${kod}', ${Number(kalem.miktar || 0)}, ${Number(kalem.guncel_fiyat || 0)})"
+                                        title="Tek Kalem Sat">
+                                    <i class="fas fa-hand-holding-usd"></i>
+                                </button>` : ``}
                             </div>
                         </td>
                     </tr>
@@ -2395,6 +2791,10 @@ function showInvestmentDetailFromGroup(yatirimId) {
     z-index: 1070 !important;
 }
 
+#satisModal.show {
+    z-index: 1080 !important;
+}
+
 /* Ensure detail modal stays visible behind edit modals */
 #detailModal.show {
     z-index: 1055 !important;
@@ -2423,6 +2823,25 @@ body.modal-open {
 .modal-backdrop:nth-of-type(2) {
     background-color: rgba(0, 0, 0, 0.3);
     z-index: 1069;
+}
+
+/* Sales summary readability in dark backgrounds */
+#satisOzet .alert {
+    color: #eaf1ff;
+    background: rgba(33, 43, 66, 0.9);
+    border: 1px solid rgba(138, 160, 207, 0.35);
+}
+
+#satisOzet .alert-heading,
+#satisOzet .fs-6,
+#satisOzet .fw-bold {
+    color: #f5f8ff !important;
+}
+
+#satisOzet .text-muted,
+#satisOzet .satis-label {
+    color: #495057 !important;
+    opacity: 1 !important;
 }
 
 /* Specific z-index management for layered backdrops */

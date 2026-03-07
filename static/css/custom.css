@@ -55,6 +55,23 @@ body {
     padding: 0.25rem 0.5rem;
 }
 
+/* Keep action buttons visible even when there are 4-5 actions */
+.action-buttons {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.action-buttons .btn {
+    flex: 0 0 auto;
+}
+
+.action-buttons-inline {
+    flex-wrap: nowrap;
+}
+
 /* Modal improvements */
 .modal-content {
     border-radius: 10px;

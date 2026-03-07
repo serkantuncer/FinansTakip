@@ -10,6 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import func
 from datetime import datetime, timedelta, date
 import requests
 import certifi
@@ -675,7 +676,7 @@ def stopaj_hesapla(yatirim, satis_tarihi=None, satis_fiyati=None):
     }
 
 
-def fifo_alis_fiyati_bul(yatirim_id, satilan_miktar):
+def fifo_alis_fiyati_bul(yatirim_id, satilan_miktar, kapsam='grup'):
     """
     FIFO mantığıyla satılacak miktara karşılık gelen ağırlıklı ortalama alış fiyatını bulur.
     """
@@ -683,12 +684,19 @@ def fifo_alis_fiyati_bul(yatirim_id, satilan_miktar):
     if not yatirim:
         return None
 
-    alis_kayitlari = Yatirim.query.filter_by(
-        user_id=yatirim.user_id,
-        kod=yatirim.kod,
-        tip=yatirim.tip,
-        durum='aktif'
-    ).order_by(Yatirim.alis_tarihi.asc()).all()
+    if kapsam == 'kalem':
+        alis_kayitlari = Yatirim.query.filter_by(
+            id=yatirim.id,
+            user_id=yatirim.user_id,
+            durum='aktif'
+        ).all()
+    else:
+        alis_kayitlari = Yatirim.query.filter_by(
+            user_id=yatirim.user_id,
+            kod=yatirim.kod,
+            tip=yatirim.tip,
+            durum='aktif'
+        ).order_by(Yatirim.alis_tarihi.asc()).all()
 
     toplam_bakiye = sum((k.miktar or Decimal('0')) for k in alis_kayitlari)
     if toplam_bakiye < satilan_miktar:
@@ -720,21 +728,30 @@ def fifo_alis_fiyati_bul(yatirim_id, satilan_miktar):
 
 
 def satis_hesapla(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
-                  komisyon=None, diger_masraf=None, stopaj_manuel=None):
+                  komisyon=None, diger_masraf=None, stopaj_manuel=None,
+                  fifo_kapsam='grup'):
     """
     Satış işleminin tüm mali sonuçlarını hesaplar. DB'ye yazmaz.
     """
     if satilan_miktar <= 0 or satis_fiyati <= 0:
         return {'hata': 'Geçersiz miktar veya fiyat'}
 
-    if satilan_miktar > yatirim.miktar:
-        return {'hata': f'Yetersiz bakiye. Mevcut: {yatirim.miktar}'}
-
     komisyon = Decimal(str(komisyon or 0))
     diger_masraf = Decimal(str(diger_masraf or 0))
 
-    fifo = fifo_alis_fiyati_bul(yatirim.id, satilan_miktar)
-    alis_fiyati_baz = fifo['alis_fiyati_baz'] if fifo else yatirim.alis_fiyati
+    fifo = fifo_alis_fiyati_bul(yatirim.id, satilan_miktar, kapsam=fifo_kapsam)
+    if not fifo:
+        if fifo_kapsam == 'kalem':
+            return {'hata': f'Yetersiz bakiye. Mevcut: {yatirim.miktar}'}
+        aktif_toplam = db.session.query(func.coalesce(func.sum(Yatirim.miktar), 0)).filter_by(
+            user_id=yatirim.user_id,
+            kod=yatirim.kod,
+            tip=yatirim.tip,
+            durum='aktif'
+        ).scalar() or Decimal('0')
+        return {'hata': f'Yetersiz bakiye. Mevcut: {aktif_toplam}'}
+
+    alis_fiyati_baz = fifo['alis_fiyati_baz']
 
     satis_tutari = satis_fiyati * satilan_miktar
     alis_tutari = alis_fiyati_baz * satilan_miktar
@@ -754,7 +771,16 @@ def satis_hesapla(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
 
     toplam_masraf = komisyon + diger_masraf + stopaj_tutari
     net_kar = brut_kar - toplam_masraf
-    kalan_miktar = yatirim.miktar - satilan_miktar
+    if fifo_kapsam == 'kalem':
+        kalan_miktar = yatirim.miktar - satilan_miktar
+    else:
+        aktif_toplam = db.session.query(func.coalesce(func.sum(Yatirim.miktar), 0)).filter_by(
+            user_id=yatirim.user_id,
+            kod=yatirim.kod,
+            tip=yatirim.tip,
+            durum='aktif'
+        ).scalar() or Decimal('0')
+        kalan_miktar = aktif_toplam - satilan_miktar
 
     return {
         'alis_fiyati_baz': alis_fiyati_baz,
@@ -776,7 +802,7 @@ def satis_hesapla(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
 def satis_kaydet(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
                  komisyon=0, diger_masraf=0, diger_masraf_aciklama='',
                  stopaj_tutari=0, stopaj_orani=0, stopaj_manuel_mi=False,
-                 notlar='', fifo_mi=True):
+                 notlar='', fifo_mi=True, fifo_kapsam='grup'):
     """
     Satış işlemini DB'ye kaydeder ve yatırım bakiyesini günceller.
     """
@@ -784,7 +810,8 @@ def satis_kaydet(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
         hesap = satis_hesapla(
             yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
             komisyon, diger_masraf,
-            stopaj_manuel=stopaj_tutari if stopaj_manuel_mi else None
+            stopaj_manuel=stopaj_tutari if stopaj_manuel_mi else None,
+            fifo_kapsam=fifo_kapsam
         )
 
         if 'hata' in hesap:
@@ -810,9 +837,23 @@ def satis_kaydet(yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
         )
         db.session.add(satis)
 
-        yatirim.miktar = hesap['kalan_miktar']
-        if hesap['tam_satis_mi']:
-            yatirim.durum = 'tamamen_satildi'
+        if fifo_kapsam == 'kalem':
+            yatirim.miktar = hesap['kalan_miktar']
+            if hesap['tam_satis_mi']:
+                yatirim.durum = 'tamamen_satildi'
+        else:
+            for kalem in hesap['fifo_detay']:
+                kalem_id = kalem.get('id')
+                kullanilan_miktar = Decimal(str(kalem.get('kullanilan_miktar', 0)))
+                if not kalem_id or kullanilan_miktar <= 0:
+                    continue
+                kayit = Yatirim.query.get(kalem_id)
+                if not kayit:
+                    continue
+                kayit.miktar = (kayit.miktar or Decimal('0')) - kullanilan_miktar
+                if kayit.miktar <= 0:
+                    kayit.miktar = Decimal('0')
+                    kayit.durum = 'tamamen_satildi'
 
         db.session.commit()
         return True, satis
@@ -1480,6 +1521,9 @@ def grupla_yatirimlar(yatirimlar, sadece_guncel_fiyatli=False):
         yatirim_gruplari_liste[key]['toplam_guncel_deger'] += guncel_deger_item
         yatirim_gruplari_liste[key]['kalemler'].append({
             'id': y.id,
+            'kod': y.kod,
+            'tip': y.tip,
+            'durum': y.durum,
             'alis_tarihi': y.alis_tarihi,
             'alis_fiyati': float(y.alis_fiyati),
             'miktar': float(y.miktar),
@@ -2380,9 +2424,13 @@ def satis_onizle(yatirim_id):
         diger_masraf = Decimal(str(data.get('diger_masraf', 0)))
         stopaj_manuel = Decimal(str(data['stopaj_manuel'])) if data.get('stopaj_manuel_mi') else None
 
+        satis_modu = str(data.get('satis_modu') or 'grup').lower()
+        fifo_kapsam = 'kalem' if satis_modu == 'kalem' else 'grup'
+
         hesap = satis_hesapla(
             yatirim, satilan_miktar, satis_fiyati, satis_tarihi,
-            komisyon, diger_masraf, stopaj_manuel
+            komisyon, diger_masraf, stopaj_manuel,
+            fifo_kapsam=fifo_kapsam
         )
 
         if 'hata' in hesap:
@@ -2403,7 +2451,7 @@ def satis_onizle(yatirim_id):
             'kalan_miktar': float(hesap['kalan_miktar']),
             'tam_satis_mi': hesap['tam_satis_mi'],
             'fifo_detay': hesap['fifo_detay'],
-            'mevcut_miktar': float(yatirim.miktar),
+            'mevcut_miktar': float(hesap['kalan_miktar'] + satilan_miktar),
         })
 
     except (InvalidOperation, ValueError) as e:
@@ -2430,6 +2478,9 @@ def satis_yap(yatirim_id):
         stopaj_manuel_mi = request.form.get('stopaj_manuel_mi') == 'true'
         notlar = request.form.get('notlar', '')
 
+        satis_modu = str(request.form.get('satis_modu', 'grup')).lower()
+        fifo_kapsam = 'kalem' if satis_modu == 'kalem' else 'grup'
+
         basarili, sonuc = satis_kaydet(
             yatirim=yatirim,
             satilan_miktar=satilan_miktar,
@@ -2441,10 +2492,22 @@ def satis_yap(yatirim_id):
             stopaj_tutari=stopaj_tutari,
             stopaj_manuel_mi=stopaj_manuel_mi,
             notlar=notlar,
+            fifo_kapsam=fifo_kapsam
         )
 
         if basarili:
-            if yatirim.durum == 'tamamen_satildi':
+            if fifo_kapsam == 'grup':
+                kalan_toplam = db.session.query(func.coalesce(func.sum(Yatirim.miktar), 0)).filter_by(
+                    user_id=current_user.id,
+                    kod=yatirim.kod,
+                    tip=yatirim.tip,
+                    durum='aktif'
+                ).scalar() or Decimal('0')
+                if kalan_toplam <= 0:
+                    flash(f'{yatirim.kod} için toplu satış tamamlandı. Net kâr: ₺{float(sonuc.net_kar):+,.2f}', 'success')
+                else:
+                    flash(f'{yatirim.kod} toplu kısmi satış tamamlandı. Kalan toplam: {float(kalan_toplam):,.4f}', 'success')
+            elif yatirim.durum == 'tamamen_satildi':
                 flash(f'{yatirim.kod} tamamen satıldı. Net kâr: ₺{float(sonuc.net_kar):+,.2f}', 'success')
             else:
                 flash(f'{yatirim.kod} kısmi satış tamamlandı. Kalan: {float(yatirim.miktar):,.4f}', 'success')
@@ -2510,12 +2573,25 @@ def api_yatirim_grup(kod):
     
     kalemler = []
     for yatirim in yatirimlar:
+        alis_fiyati = yatirim.alis_fiyati or Decimal('0')
+        miktar = yatirim.miktar or Decimal('0')
+        guncel_fiyat = yatirim.guncel_fiyat
+        guncel_deger = (guncel_fiyat * miktar) if guncel_fiyat is not None else (alis_fiyati * miktar)
+        kar_zarar = (guncel_fiyat - alis_fiyati) * miktar if guncel_fiyat is not None else Decimal('0')
+        getiri = ((guncel_fiyat / alis_fiyati) - 1) * 100 if (guncel_fiyat is not None and alis_fiyati > 0) else Decimal('0')
+
         kalemler.append({
             'id': yatirim.id,
+            'kod': yatirim.kod,
+            'tip': yatirim.tip,
+            'durum': yatirim.durum,
             'alis_tarihi': yatirim.alis_tarihi.isoformat(),
-            'alis_fiyati': float(yatirim.alis_fiyati),
-            'miktar': float(yatirim.miktar),
-            'guncel_fiyat': float(yatirim.guncel_fiyat) if yatirim.guncel_fiyat else None,
+            'alis_fiyati': float(alis_fiyati),
+            'miktar': float(miktar),
+            'guncel_fiyat': float(guncel_fiyat) if guncel_fiyat is not None else None,
+            'guncel_deger': float(guncel_deger),
+            'kar_zarar': float(kar_zarar),
+            'getiri': float(getiri),
             'kategori': yatirim.kategori,
             'notlar': yatirim.notlar
         })
