@@ -977,170 +977,104 @@ def bist_hisse_verisi_cek(hisse_kodu):
         return None
 
 def altin_verisi_cek(altin_turu_kodu):
-    """Altinkaynak servisine manuel SOAP isteği göndererek altın fiyatlarını çeker."""
-    service_url = 'http://data.altinkaynak.com/DataService.asmx'
+    """Altinkaynak JSON servisi üzerinden altın fiyatlarını çeker."""
+    service_url = 'https://static.altinkaynak.com/public/Gold'
     altin_turu_kodu_upper = altin_turu_kodu.upper()
     cached_veri = cache_den_al('altin', altin_turu_kodu_upper)
     if cached_veri:
         _log_cache_hit_once("Altin", altin_turu_kodu_upper)
         return cached_veri
 
-    app.logger.info(f"Altın Verisi Çekiliyor (Altinkaynak Manuel SOAP): {altin_turu_kodu_upper} - URL: {service_url}")
+    app.logger.info(f"Altın Verisi Çekiliyor (Altinkaynak JSON): {altin_turu_kodu_upper} - URL: {service_url}")
 
-    alt_username = os.environ.get('ALTINKAYNAK_USERNAME')
-    alt_password = os.environ.get('ALTINKAYNAK_PASSWORD')
-
-    if not alt_username or not alt_password:
-        app.logger.error('ALTINKAYNAK_USERNAME veya ALTINKAYNAK_PASSWORD tanımlanmamış.')
-        return None
-
-    # XML içindeki 'Aciklama' etiketine göre eşleştirme (YANITTAN ALINAN GERÇEK DEĞERLER!)
-    altin_tipi_map = {
-        'GA': 'Gram Altın',       # XML'deki Açıklama ile eşleşiyor
-        'C': 'Çeyrek Altın',      # XML'deki Açıklama ile eşleşiyor
-        'Y': 'Yarım Altın',       # XML'deki Açıklama ile eşleşiyor
-        'T': 'Teklik Altın',      # XML'deki Açıklama 'Teklik Altın' (Cumhuriyet değil)
-        # 'ONS': 'ONS',           # ONS için XML'de doğrudan eşleşme yok
+    # Uygulama içi kod -> yeni servisteki Kod alanı
+    altin_tipi_kod_map = {
+        'GA': 'GA',
+        'C': 'C',
+        'Y': 'Y',
+        'T': 'T',
+        'ONS': 'XAUUSD',
     }
 
-    if altin_turu_kodu_upper not in altin_tipi_map:
+    hedef_servis_kodu = altin_tipi_kod_map.get(altin_turu_kodu_upper)
+    if not hedef_servis_kodu:
         app.logger.error(f"Desteklenmeyen altın türü: {altin_turu_kodu_upper}")
         return None
 
-    # SOAP 1.1 İstek XML'ini oluşturma (f-string ile)
-    soap_xml = f"""<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Header>
-    <AuthHeader xmlns="http://data.altinkaynak.com/">
-      <Username>{alt_username}</Username>
-      <Password>{alt_password}</Password>
-    </AuthHeader>
-  </soap:Header>
-  <soap:Body>
-    <GetGold xmlns="http://data.altinkaynak.com/" />
-  </soap:Body>
-</soap:Envelope>"""
-
-    # HTTP Header'larını ayarlama (SOAP 1.1 için)
-    headers = {
-        'Content-Type': 'text/xml; charset=utf-8',
-        'SOAPAction': '"http://data.altinkaynak.com/GetGold"',
-        'Host': 'data.altinkaynak.com'
-    }
+    def _parse_tr_decimal(deger):
+        if deger is None:
+            return None
+        text = str(deger).strip()
+        if not text:
+            return None
+        # "7.320,00" -> "7320.00"
+        normalized = text.replace('.', '').replace(',', '.')
+        return Decimal(normalized)
 
     try:
-        # POST isteğini gönderme
-        response = http_session.post(service_url, headers=headers, data=soap_xml.encode('utf-8'), timeout=20)
-        response.raise_for_status() # HTTP 4xx/5xx hatalarını kontrol et
+        response = http_session.get(service_url, timeout=20)
+        response.raise_for_status()
 
-        # Yanıt XML'ini parse etme
-        try:
-            response_xml_root = ET.fromstring(response.content)
-            namespaces = {
-                'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
-                'ak': 'http://data.altinkaynak.com/'
-            }
-            get_gold_result_element = response_xml_root.find('.//soap:Body/ak:GetGoldResponse/ak:GetGoldResult', namespaces)
-
-            if get_gold_result_element is None or get_gold_result_element.text is None:
-                 get_gold_result_element = response_xml_root.find('.//{http://data.altinkaynak.com/}GetGoldResult')
-                 if get_gold_result_element is None or get_gold_result_element.text is None:
-                    app.logger.warning("Altinkaynak yanıt XML'inde GetGoldResult etiketi veya içeriği bulunamadı.")
-                    app.logger.debug(f"Alınan yanıt içeriği (ilk 500kr): {response.text[:500]}")
-                    if "Nesne başvurusu" in response.text:
-                        app.logger.error("Altinkaynak servisi 'Nesne başvurusu' hatası döndürdü (yetkilendirme hatası olabilir)")
-                    return None
-
-            inner_xml_string = get_gold_result_element.text
-            # TAM YANITI LOGLA (DEBUG İÇİN) - Eğer çok uzunsa sorun olabilir, gerekirse kısaltılabilir.
-            if ALTIN_VERBOSE_DEBUG:
-                app.logger.debug(f"Altinkaynak GetGoldResult İçerik Stringi (ilk 1000kr): {inner_xml_string[:1000]}...")
-
-            # --- Bu string'i de XML olarak parse et ---
-            try:
-                inner_root = ET.fromstring(inner_xml_string)
-                if ALTIN_VERBOSE_DEBUG:
-                    app.logger.debug(f"Inner XML root tag adı: '{inner_root.tag}'")
-                altin_bulundu = False
-
-                # Inner XML içindeki altın kayıtlarını bul (Yapı: <Kur>...</Kur>)
-                kur_elements = inner_root.findall('./Kur') # Doğrudan root altındaki Kur'ları ara
-                if ALTIN_VERBOSE_DEBUG:
-                    app.logger.debug(f"Toplam {len(kur_elements)} adet <Kur> elementi bulundu.")
-
-                for i, kur_element in enumerate(kur_elements):
-                    aciklama_raw = kur_element.findtext('Aciklama')
-                    satis_str = kur_element.findtext('Satis')
-                    log_prefix = f"[Kur {i+1}/{len(kur_elements)}]"
-
-                    if aciklama_raw and satis_str:
-                        aciklama_clean = aciklama_raw.strip()
-                        target_aciklama = altin_tipi_map[altin_turu_kodu_upper]
-                        aranan_lower = target_aciklama.lower()
-                        bulunan_lower = aciklama_clean.lower()
-                        eslesme_sonucu = (aranan_lower == bulunan_lower)
-
-                        if ALTIN_VERBOSE_DEBUG:
-                            app.logger.debug(f"{log_prefix} Aciklama Raw: '{aciklama_raw}', Clean: '{aciklama_clean}', Satis: '{satis_str}'")
-                            app.logger.debug(f"{log_prefix} KARŞILAŞTIRMA: Aranan (lower): '{aranan_lower}', Bulunan (lower): '{bulunan_lower}', SONUÇ (==): {eslesme_sonucu}")
-
-                        if eslesme_sonucu: # Tam eşleşme kontrolü
-                            try:
-                                fiyat = Decimal(satis_str.replace(',', '.'))
-                            except (InvalidOperation, TypeError) as e_decimal:
-                                app.logger.error(f"{log_prefix} Altinkaynak Inner XML fiyatı ('{aciklama_clean}') çevirme hatası: '{satis_str}', Hata: {e_decimal}")
-                                continue # Sonraki kayda geç
-
-                            # Also get buying price if available
-                            alis_str = kur_element.findtext('Alis')
-                            alis_fiyat = None
-                            if alis_str:
-                                try:
-                                    alis_fiyat = Decimal(alis_str.replace(',', '.'))
-                                except (InvalidOperation, TypeError):
-                                    pass
-
-                            veri = {
-                                'isim': aciklama_clean,
-                                'guncel_fiyat': fiyat,  # Selling price
-                                'alis_fiyat': alis_fiyat,  # Buying price
-                                'satis_fiyat': fiyat,   # Selling price (explicit)
-                                'tarih': datetime.now()
-                            }
-                            cache_kaydet('altin', altin_turu_kodu_upper, veri)
-                            app.logger.info(f"Altinkaynak Altın Verisi (Manuel SOAP) Başarıyla Çekildi: {altin_turu_kodu_upper} ({aciklama_clean}) - Fiyat: {fiyat}")
-                            altin_bulundu = True
-                            return veri # Eşleşme bulundu, döngüden ve fonksiyondan çık
-                    else:
-                         app.logger.warning(f"{log_prefix} Aciklama veya Satis etiketi bulunamadı veya boş.")
-
-                # Eğer döngü bittiyse ve altın bulunamadıysa
-                if not altin_bulundu:
-                    app.logger.warning(f"Döngü bitti. Altinkaynak Inner XML içinde aranan altın türü bulunamadı: '{target_aciklama}' (Kod: {altin_turu_kodu_upper})")
-                    return None
-                
-            except ET.ParseError as e:
-                app.logger.error(f"Altın veri XML'i parse edilemedi: {str(e)}")
-                app.logger.debug(f"Parse edilemeyen XML: {inner_xml_string[:200]}")
-                return None
-                
-        except ET.ParseError as e:
-            app.logger.error(f"SOAP yanıt XML'i parse edilemedi: {str(e)}")
-            app.logger.debug(f"Parse edilemeyen yanıt: {response.text[:200]}")
+        gold_data = response.json()
+        if not isinstance(gold_data, list):
+            app.logger.error(f"Altinkaynak JSON beklenen formatta değil ({altin_turu_kodu_upper}).")
             return None
 
+        hedef_kayit = None
+        for item in gold_data:
+            if str(item.get('Kod', '')).upper() == hedef_servis_kodu:
+                hedef_kayit = item
+                break
+
+        if not hedef_kayit:
+            app.logger.warning(
+                f"Altinkaynak JSON içinde aranan altın türü bulunamadı: "
+                f"{altin_turu_kodu_upper} -> {hedef_servis_kodu}"
+            )
+            return None
+
+        try:
+            satis_fiyat = _parse_tr_decimal(hedef_kayit.get('Satis'))
+            alis_fiyat = _parse_tr_decimal(hedef_kayit.get('Alis'))
+        except (InvalidOperation, TypeError, ValueError) as e_decimal:
+            app.logger.error(
+                f"Altinkaynak JSON fiyat parse hatası ({altin_turu_kodu_upper}): {e_decimal} | "
+                f"Kayıt: {hedef_kayit}"
+            )
+            return None
+
+        if satis_fiyat is None:
+            app.logger.warning(f"Altinkaynak JSON satış fiyatı boş ({altin_turu_kodu_upper}).")
+            return None
+
+        aciklama = str(hedef_kayit.get('Aciklama', altin_turu_kodu_upper)).strip()
+        veri = {
+            'isim': aciklama,
+            'guncel_fiyat': satis_fiyat,
+            'alis_fiyat': alis_fiyat,
+            'satis_fiyat': satis_fiyat,
+            'tarih': datetime.now()
+        }
+        cache_kaydet('altin', altin_turu_kodu_upper, veri)
+        app.logger.info(
+            f"Altinkaynak Altın Verisi (JSON) Başarıyla Çekildi: "
+            f"{altin_turu_kodu_upper} ({aciklama}) - Fiyat: {satis_fiyat}"
+        )
+        return veri
+
     except requests.exceptions.Timeout:
-         app.logger.error(f"Altinkaynak Manuel SOAP isteği zaman aşımına uğradı ({altin_turu_kodu_upper}).")
-         return None
+        app.logger.error(f"Altinkaynak JSON isteği zaman aşımına uğradı ({altin_turu_kodu_upper}).")
+        return None
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Altinkaynak Manuel SOAP isteği hatası ({altin_turu_kodu_upper}): {str(e)}")
+        app.logger.error(f"Altinkaynak JSON isteği hatası ({altin_turu_kodu_upper}): {str(e)}")
         if hasattr(e, 'response') and e.response is not None:
-             app.logger.error(f"Altinkaynak Hata Yanıt Kodu: {e.response.status_code}, Yanıt: {e.response.text[:200]}")
-             if "Nesne başvurusu" in e.response.text:
-                  app.logger.error("Altinkaynak sunucusu hala 'Nesne Başvurusu' hatası veriyor (HTTP Hata Kodu üzerinden).")
+            app.logger.error(f"Altinkaynak Hata Yanıt Kodu: {e.response.status_code}, Yanıt: {e.response.text[:200]}")
+        return None
+    except ValueError as e:
+        app.logger.error(f"Altinkaynak JSON parse hatası ({altin_turu_kodu_upper}): {str(e)}")
         return None
     except Exception as e:
-        app.logger.error(f"Altinkaynak Altın verisi çekme (Manuel SOAP Genel) hatası ({altin_turu_kodu_upper}): {str(e)}", exc_info=True)
+        app.logger.error(f"Altinkaynak Altın verisi çekme (JSON Genel) hatası ({altin_turu_kodu_upper}): {str(e)}", exc_info=True)
         return None
 
 def doviz_verisi_cek(doviz_kodu):
@@ -1954,17 +1888,47 @@ def yatirim_ekle():
                 kod=kod,
                 alis_tarihi=alis_tarihi,
                 alis_fiyati=alis_fiyati,
+                guncel_fiyat=alis_fiyati,
+                son_guncelleme=datetime.now(),
                 miktar=miktar,
                 notlar=notlar,
                 kategori=kategori,
                 user_id=current_user.id
             )
+
+            if tip == 'altin':
+                altin_isim_map = {
+                    'GA': 'Gram Altın',
+                    'C': 'Çeyrek Altın',
+                    'Y': 'Yarım Altın',
+                    'T': 'Teklik Altın',
+                    'ONS': 'Ons Altın'
+                }
+                yatirim.isim = altin_isim_map.get(kod, yatirim.isim)
+                yatirim.guncel_alis_fiyat = alis_fiyati
+                yatirim.guncel_satis_fiyat = alis_fiyati
+            elif tip == 'doviz':
+                yatirim.guncel_alis_fiyat = alis_fiyati
+                yatirim.guncel_satis_fiyat = alis_fiyati
             
             db.session.add(yatirim)
             db.session.commit()
             
-            # İlk fiyat güncelleme ve isim doğrulama
-            fiyat_guncelle(yatirim.id)
+            # İlk eklemede manuel fiyat ile kayıt tamamlanır.
+            # Altın kaynağı timeout olursa ekleme akışını bloklamamak için
+            # altın tipinde anlık fiyat çekimi atlanır.
+            if tip != 'altin':
+                basarili, mesaj = fiyat_guncelle(yatirim.id)
+                if not basarili:
+                    app.logger.warning(
+                        f"İlk fiyat güncelleme başarısız ({tip}:{kod}): {mesaj}. "
+                        "Manuel alış fiyatı ile kayda devam edildi."
+                    )
+            else:
+                app.logger.info(
+                    f"Altın yatırımı ({kod}) eklenirken başlangıç fiyatı manuel alış fiyatından alındı. "
+                    "Dış fiyat çekimi atlandı."
+                )
 
             if tip == 'fon':
                 fon_bilgisi_yatirima_kaydet(yatirim)
@@ -2089,11 +2053,8 @@ def fiyat_guncelle_route(yatirim_id):
 def toplu_fiyat_guncelle():
     yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
 
-    altin_creds_var = bool(os.environ.get('ALTINKAYNAK_USERNAME') and os.environ.get('ALTINKAYNAK_PASSWORD'))
-
     basarili_count = 0
     hata_count = 0
-    atlanan_altin_count = 0
 
     # Aynı varlığı (kod+tip) sadece bir kez çekmek için grupla
     gruplar = {}
@@ -2107,20 +2068,12 @@ def toplu_fiyat_guncelle():
             }
         gruplar[key]['yatirimlar'].append(yatirim)
 
-    # Altın credentials yoksa altın gruplarını baştan atla
-    cekilecek_gruplar = []
-    for grup in gruplar.values():
-        if grup['tip'] == 'altin' and not altin_creds_var:
-            atlanan_altin_count += len(grup['yatirimlar'])
-            continue
-        cekilecek_gruplar.append(grup)
-
     # Dış API çağrılarını paralel yap
     cekim_sonuclari = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
         future_to_key = {
             executor.submit(fiyat_verisi_cek_by_tip_kod, grup['tip'], grup['kod']): f"{grup['tip']}:{grup['kod']}"
-            for grup in cekilecek_gruplar
+            for grup in gruplar.values()
         }
         for future in as_completed(future_to_key):
             key = future_to_key[future]
@@ -2132,9 +2085,6 @@ def toplu_fiyat_guncelle():
 
     # DB yazımları tek thread'de (SQLAlchemy session güvenliği)
     for key, grup in gruplar.items():
-        if grup['tip'] == 'altin' and not altin_creds_var:
-            continue
-
         basarili, veri = cekim_sonuclari.get(key, (False, None))
         if not basarili or not veri:
             hata_count += len(grup['yatirimlar'])
@@ -2166,12 +2116,6 @@ def toplu_fiyat_guncelle():
 
     if basarili_count > 0:
         flash(f'{basarili_count} yatırımın fiyatı güncellendi!', 'success')
-
-    if atlanan_altin_count > 0:
-        flash(
-            f'{atlanan_altin_count} altın yatırımı atlandı (ALTINKAYNAK_USERNAME/ALTINKAYNAK_PASSWORD eksik).',
-            'info'
-        )
 
     if hata_count > 0:
         flash(f'{hata_count} yatırımın fiyatı güncellenemedi!', 'warning')

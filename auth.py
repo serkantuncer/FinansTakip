@@ -84,6 +84,42 @@ def register():
     
     return render_template('register.html')
 
+
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        email = (request.form.get('email') or '').strip().lower()
+        new_password = request.form.get('new_password') or ''
+        new_password_confirm = request.form.get('new_password_confirm') or ''
+
+        if not username or not email:
+            flash('Kullanıcı adı ve e-posta zorunludur!', 'danger')
+            return render_template('forgot_password.html')
+
+        if new_password != new_password_confirm:
+            flash('Şifreler eşleşmiyor!', 'danger')
+            return render_template('forgot_password.html')
+
+        if len(new_password) < 6:
+            flash('Yeni şifre en az 6 karakter olmalıdır!', 'danger')
+            return render_template('forgot_password.html')
+
+        user = User.query.filter_by(username=username, email=email).first()
+        if not user:
+            flash('Kullanıcı adı/e-posta bilgisi eşleşmedi!', 'danger')
+            return render_template('forgot_password.html')
+
+        user.password_hash = generate_password_hash(new_password)
+        db.session.commit()
+        flash('Şifreniz güncellendi. Yeni şifreniz ile giriş yapabilirsiniz.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('forgot_password.html')
+
 @auth_bp.route('/logout')
 @login_required
 def logout():

@@ -1495,6 +1495,33 @@ const investmentCodes = {
     ]
 };
 
+const VALIDATE_TIMEOUT_MS = 8000;
+let activeValidationController = null;
+
+function renderManualEntryAlert(message, level = 'warning') {
+    const kodSonuc = document.getElementById('kodSonuc');
+    if (!kodSonuc) return;
+
+    const icon = level === 'danger' ? 'times-circle' : 'exclamation-triangle';
+    kodSonuc.innerHTML = `
+        <div class="alert alert-${level} alert-dismissible fade show">
+            <i class="fas fa-${icon} me-2"></i>
+            ${message}<br>
+            <small class="text-muted">Manuel alış fiyatı girip kaydedebilirsiniz.</small>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+        </div>
+    `;
+    kodSonuc.style.display = 'block';
+}
+
+function cancelValidationWait() {
+    if (activeValidationController) {
+        activeValidationController.abort();
+        activeValidationController = null;
+    }
+    renderManualEntryAlert('Fiyat bekleme işlemi iptal edildi.', 'info');
+}
+
 function handleInvestmentTypeChange() {
     console.log('=== handleInvestmentTypeChange called ===');
     const tipSelect = document.getElementById('tip');
@@ -1878,11 +1905,28 @@ function validateCode() {
         return;
     }
 
+    // Cancel any previous pending validation request.
+    if (activeValidationController) {
+        activeValidationController.abort();
+        activeValidationController = null;
+    }
+
+    const controller = new AbortController();
+    activeValidationController = controller;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, VALIDATE_TIMEOUT_MS);
+
     // Show loading
     kodSonuc.innerHTML = `
         <div class="alert alert-info">
             <div class="spinner-border spinner-border-sm me-2" role="status"></div>
             ${foundCode.isim} için güncel fiyat kontrol ediliyor...
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="cancelValidationWait()">
+                Beklemeyi İptal Et
+            </button>
         </div>
     `;
     kodSonuc.style.display = 'block';
@@ -1894,6 +1938,7 @@ function validateCode() {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrfTokenAl()
         },
+        signal: controller.signal,
         body: JSON.stringify({
             tip: tip,
             kod: kod
@@ -1955,14 +2000,25 @@ function validateCode() {
     })
     .catch(error => {
         console.error('Error:', error);
-        kodSonuc.innerHTML = `
-            <div class="alert alert-danger alert-dismissible fade show">
-                <i class="fas fa-times-circle me-2"></i>
-                Kod doğrulama sırasında hata oluştu. Lütfen tekrar deneyin.
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
-            </div>
-        `;
-        kodSonuc.style.display = 'block';
+        if (error && error.name === 'AbortError') {
+            if (timedOut) {
+                renderManualEntryAlert(
+                    `${foundCode.isim} için fiyat servisi ${VALIDATE_TIMEOUT_MS / 1000} sn içinde yanıt vermedi.`,
+                    'warning'
+                );
+            }
+            return;
+        }
+        renderManualEntryAlert(
+            `${foundCode.isim} için kod doğrulama sırasında hata oluştu. Servis geçici olarak erişilemeyebilir.`,
+            'danger'
+        );
+    })
+    .finally(() => {
+        clearTimeout(timeoutId);
+        if (activeValidationController === controller) {
+            activeValidationController = null;
+        }
     });
 }
 

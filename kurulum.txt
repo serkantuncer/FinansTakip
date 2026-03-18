@@ -1,6 +1,6 @@
 python -m venv .venv
 Windows:
-my_env\Scripts\activate
+.venv\Scripts\activate
 
 Linux/macOS:
 chmod +x .venv/bin/activate  (izin problemi olursa)
@@ -82,6 +82,19 @@ pip install ttkbootstrap
 python -m PyInstaller YatirimTakip.spec --clean
 
 dist\YatirimTakip\YatirimTakip.exe
+
+
+######################
+# Yeni platform spec dosyaları
+#
+# Windows:
+#   python -m PyInstaller FinansTakip-Windows.spec --clean --noconfirm
+#
+# macOS:
+#   python -m PyInstaller FinansTakip-macOS.spec --clean --noconfirm
+#
+# Çıktı adı:
+#   FinansTakipSistemi / FinansTakipSistemi.app
 
 spec. dosyası kodu:
 
