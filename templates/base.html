@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
@@ -41,30 +41,53 @@
                             <i class="fas fa-home me-1"></i>Ana Sayfa
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('yatirimlar') }}">
-                            <i class="fas fa-list me-1"></i>Yatırımlar
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarYatirimDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-wallet me-1"></i>Portföy
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarYatirimDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('yatirimlar') }}">
+                                <i class="fas fa-list me-1"></i>Yatırımlar
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('satislar') }}">
+                                <i class="fas fa-receipt me-1"></i>Satışlar
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('export_portfolio_pdf') }}">
+                                <i class="fas fa-file-pdf me-1"></i>Portföy İndir
+                            </a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('satislar') }}">
-                            <i class="fas fa-receipt me-1"></i>Satışlar
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarToplulukDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-users me-1"></i>Paylaşım
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarToplulukDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('share_portfolio') }}">
+                                <i class="fas fa-share-alt me-1"></i>Portföy Paylaş
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('community_portfolios') }}">
+                                <i class="fas fa-globe me-1"></i>Topluluk
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('my_follows') }}">
+                                <i class="fas fa-user-check me-1"></i>Takip Ettiklerim
+                            </a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('stopaj_sayfasi') }}">
-                            <i class="fas fa-percent me-1"></i>Fon Stopaj Hesapla
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarVergiDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-percent me-1"></i>Stopaj
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('stopaj_oranlari') }}">
-                            <i class="fas fa-sliders-h me-1"></i>Stopaj Oranları
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('export_portfolio_pdf') }}">
-                            <i class="fas fa-file-pdf me-1"></i>Portföy İndir
-                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="navbarVergiDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('stopaj_sayfasi') }}">
+                                <i class="fas fa-calculator me-1"></i>Fon Stopaj Hesapla
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('stopaj_oranlari') }}">
+                                <i class="fas fa-sliders-h me-1"></i>Stopaj Oranları
+                            </a></li>
+                        </ul>
                     </li>
                 </ul>
                 

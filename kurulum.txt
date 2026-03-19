@@ -1,4 +1,4 @@
-﻿FinansTakip - Kurulum ve Build Rehberi
+FinansTakip - Kurulum ve Build Rehberi
 
 1) Sanal ortam oluşturma
 python -m venv .venv

@@ -1,4 +1,4 @@
-﻿# app.py - Ana Flask uygulaması
+# app.py - Ana Flask uygulaması
 import os
 import sys
 import shutil
