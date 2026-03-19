@@ -11,6 +11,7 @@ env/
 
 # Environment variables
 .env
+*.db
 
 # Test / coverage / tooling
 .pytest_cache/
@@ -39,6 +40,7 @@ dist/
 Thumbs.db
 
 # Project-local data files
+instance/
 instance/*.db
 instance/*.db--
 finans_takip.db

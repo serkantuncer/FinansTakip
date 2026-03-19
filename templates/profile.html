@@ -8,78 +8,112 @@
         <div class="col-md-8 mx-auto">
             <div class="card">
                 <div class="card-header">
-                    <h4>
-                        <i class="fas fa-user me-2"></i>
-                        Profil Yönetimi
-                    </h4>
+                    <h4><i class="fas fa-user me-2"></i>Profil Yonetimi</h4>
                 </div>
                 <div class="card-body">
-                    <!-- Account Information -->
                     <div class="mb-4">
                         <h5>Hesap Bilgileri</h5>
                         <form method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="update_info">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="username" class="form-label">Kullanıcı Adı</label>
-                                    <input type="text" class="form-control" id="username" name="username" 
-                                           value="{{ current_user.username }}" required>
+                                    <label for="username" class="form-label">Kullanici Adi</label>
+                                    <input type="text" class="form-control" id="username" name="username" value="{{ current_user.username }}" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="email" class="form-label">E-posta</label>
-                                    <input type="email" class="form-control" id="email" name="email" 
-                                           value="{{ current_user.email }}" required>
+                                    <input type="email" class="form-control" id="email" name="email" value="{{ current_user.email }}" required>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save me-2"></i>Bilgileri Güncelle
-                            </button>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-save me-2"></i>Bilgileri Guncelle</button>
                         </form>
                     </div>
 
                     <hr>
 
-                    <!-- Password Change -->
                     <div class="mb-4">
-                        <h5>Şifre Değiştir</h5>
+                        <h5>Sifre Degistir</h5>
                         <form method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="change_password">
                             <div class="mb-3">
-                                <label for="current_password" class="form-label">Mevcut Şifre</label>
-                                <input type="password" class="form-control" id="current_password" 
-                                       name="current_password" required>
+                                <label for="current_password" class="form-label">Mevcut Sifre</label>
+                                <input type="password" class="form-control" id="current_password" name="current_password" required>
                             </div>
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label for="new_password" class="form-label">Yeni Şifre</label>
-                                    <input type="password" class="form-control" id="new_password" 
-                                           name="new_password" minlength="6" required>
+                                    <label for="new_password" class="form-label">Yeni Sifre</label>
+                                    <input type="password" class="form-control" id="new_password" name="new_password" minlength="6" required>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="confirm_password" class="form-label">Yeni Şifre (Tekrar)</label>
-                                    <input type="password" class="form-control" id="confirm_password" 
-                                           name="confirm_password" minlength="6" required>
+                                    <label for="confirm_password" class="form-label">Yeni Sifre (Tekrar)</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" minlength="6" required>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-warning">
-                                <i class="fas fa-key me-2"></i>Şifreyi Değiştir
-                            </button>
+                            <button type="submit" class="btn btn-warning"><i class="fas fa-key me-2"></i>Sifreyi Degistir</button>
                         </form>
                     </div>
 
                     <hr>
 
-                    <!-- Account Statistics -->
                     <div class="mb-4">
-                        <h5>Hesap İstatistikleri</h5>
+                        <h5>Otomatik Fiyat Guncelleme</h5>
+                        <form method="POST" action="{{ url_for('otomatik_fiyat_ayarlari_guncelle') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="scheduler_enabled" name="scheduler_enabled" {% if scheduler_settings.enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="scheduler_enabled">Otomatik fiyat guncellemeyi etkinlestir</label>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="scheduler_interval_minutes" class="form-label">Guncelleme Sikligi (dakika)</label>
+                                    <input type="number" class="form-control" id="scheduler_interval_minutes" name="scheduler_interval_minutes" min="1" max="720" value="{{ scheduler_settings.interval_minutes }}" required>
+                                    <small class="form-text text-muted">Onerilen aralik: 15 - 60 dakika</small>
+                                </div>
+                                <div class="col-md-6 mb-3 d-flex align-items-end">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="scheduler_run_on_startup" name="scheduler_run_on_startup" {% if scheduler_settings.run_on_startup %}checked{% endif %}>
+                                        <label class="form-check-label" for="scheduler_run_on_startup">Uygulama acilisinda ilk guncellemeyi hemen calistir</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="home_live_refresh_enabled" name="home_live_refresh_enabled" {% if scheduler_settings.home_live_refresh_enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="home_live_refresh_enabled">Ana sayfada verileri sayfa yenilemeden otomatik guncelle</label>
+                            </div>
+
+                            <button type="submit" class="btn btn-info"><i class="fas fa-clock me-2"></i>Ayarlari Kaydet</button>
+                        </form>
+
+                        <div class="alert alert-light border mt-3 mb-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <strong>Canli Durum</strong>
+                                <span id="schedulerStatusBadge" class="badge {% if scheduler_status.running %}bg-warning text-dark{% elif scheduler_status.last_result == 'success' %}bg-success{% elif scheduler_status.last_result == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                    {% if scheduler_status.running %}Calisiyor{% else %}Beklemede{% endif %}
+                                </span>
+                            </div>
+                            <div class="small mt-2 text-muted">
+                                <div>Son mesaj: <span id="schedulerLastMessage">{{ scheduler_status.last_message or '-' }}</span></div>
+                                <div>Son baslangic: <span id="schedulerLastStart">{{ scheduler_status.last_start or '-' }}</span></div>
+                                <div>Son bitis: <span id="schedulerLastEnd">{{ scheduler_status.last_end or '-' }}</span></div>
+                                <div>Son guncelleme: <span id="schedulerLastCounts">{{ scheduler_status.last_updated_assets or 0 }} varlik / {{ scheduler_status.last_updated_records or 0 }} kayit</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="mb-4">
+                        <h5>Hesap Istatistikleri</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="card bg-light">
                                     <div class="card-body text-center text-dark">
                                         <i class="fas fa-calendar-alt fa-2x text-primary mb-2"></i>
-                                        <h6 class="text-dark">Üyelik Tarihi</h6>
+                                        <h6 class="text-dark">Uyelik Tarihi</h6>
                                         <p class="text-dark">{{ current_user.created_at.strftime('%d.%m.%Y') }}</p>
                                     </div>
                                 </div>
@@ -88,7 +122,7 @@
                                 <div class="card bg-light">
                                     <div class="card-body text-center text-dark">
                                         <i class="fas fa-chart-line fa-2x text-success mb-2"></i>
-                                        <h6 class="text-dark">Toplam Yatırım</h6>
+                                        <h6 class="text-dark">Toplam Yatirim</h6>
                                         <p class="text-dark">{{ current_user.yatirimlar|length }} Adet</p>
                                     </div>
                                 </div>
@@ -97,9 +131,7 @@
                     </div>
 
                     <div class="text-center">
-                        <a href="{{ url_for('index') }}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left me-2"></i>Ana Sayfaya Dön
-                        </a>
+                        <a href="{{ url_for('index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-2"></i>Ana Sayfaya Don</a>
                     </div>
                 </div>
             </div>
@@ -110,16 +142,62 @@
 
 {% block scripts %}
 <script>
-// Password confirmation validation
-document.getElementById('confirm_password').addEventListener('input', function() {
-    const newPassword = document.getElementById('new_password').value;
-    const confirmPassword = this.value;
-    
-    if (newPassword !== confirmPassword) {
-        this.setCustomValidity('Şifreler eşleşmiyor');
-    } else {
-        this.setCustomValidity('');
-    }
+function formatSchedulerDate(value) {
+    if (!value) return '-';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString('tr-TR');
+}
+
+async function schedulerDurumYenile() {
+    try {
+        const r = await fetch('/api/scheduler-durum');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data || !data.success) return;
+
+        const status = data.status || {};
+        const badge = document.getElementById('schedulerStatusBadge');
+        if (badge) {
+            badge.className = 'badge';
+            if (status.running) {
+                badge.classList.add('bg-warning', 'text-dark');
+                badge.textContent = 'Calisiyor';
+            } else if (status.last_result === 'success') {
+                badge.classList.add('bg-success');
+                badge.textContent = 'Beklemede';
+            } else if (status.last_result === 'failed') {
+                badge.classList.add('bg-danger');
+                badge.textContent = 'Hata';
+            } else {
+                badge.classList.add('bg-secondary');
+                badge.textContent = 'Beklemede';
+            }
+        }
+
+        const msg = document.getElementById('schedulerLastMessage');
+        const st = document.getElementById('schedulerLastStart');
+        const en = document.getElementById('schedulerLastEnd');
+        const cnt = document.getElementById('schedulerLastCounts');
+        if (msg) msg.textContent = status.last_message || '-';
+        if (st) st.textContent = formatSchedulerDate(status.last_start);
+        if (en) en.textContent = formatSchedulerDate(status.last_end);
+        if (cnt) cnt.textContent = `${status.last_updated_assets || 0} varlik / ${status.last_updated_records || 0} kayit`;
+    } catch (_) {}
+}
+
+const confirmEl = document.getElementById('confirm_password');
+if (confirmEl) {
+    confirmEl.addEventListener('input', function() {
+        const newPassword = document.getElementById('new_password').value;
+        const confirmPassword = this.value;
+        this.setCustomValidity(newPassword !== confirmPassword ? 'Sifreler eslesmiyor' : '');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    schedulerDurumYenile();
+    setInterval(schedulerDurumYenile, 10000);
 });
 </script>
 {% endblock %}

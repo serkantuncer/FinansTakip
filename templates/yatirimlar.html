@@ -22,6 +22,11 @@
                             <i class="fas fa-sync me-2"></i>Fiyatları Güncelle
                         </button>
                     </form>
+                    <span id="otomatikDurumBadge"
+                          class="badge ms-2 {% if scheduler_status.running %}bg-warning text-dark{% elif scheduler_status.last_result == 'success' %}bg-success{% elif scheduler_status.last_result == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                        {% if scheduler_status.running %}Otomatik: Çalışıyor{% else %}Otomatik: Beklemede{% endif %}
+                    </span>
+                    <small class="text-muted ms-2" id="otomatikDurumText">{{ scheduler_status.last_message or '-' }}</small>
                 </div>
             </div>
         </div>
@@ -487,6 +492,13 @@
                                    step="0.000001" min="0.000001" required>
                         </div>
                         <div class="col-md-6 mb-3">
+                            <label for="alis_komisyon" class="form-label">Alış Komisyonu (₺)</label>
+                            <input type="number" class="form-control" id="alis_komisyon" name="alis_komisyon"
+                                   step="0.01" min="0" value="0" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
                             <label for="kategori" class="form-label">Kategori</label>
                             <select class="form-select" id="kategori" name="kategori">
                                 <option value="">Kategori Seçin</option>
@@ -630,6 +642,39 @@ let aktifSatisModu = 'grup';
 function csrfTokenAl() {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.getAttribute('content') : '';
+}
+
+function otomatikDurumYaz(status) {
+    const badge = document.getElementById('otomatikDurumBadge');
+    const text = document.getElementById('otomatikDurumText');
+    if (!badge || !text) return;
+
+    badge.className = 'badge ms-2';
+    if (status.running) {
+        badge.classList.add('bg-warning', 'text-dark');
+        badge.textContent = 'Otomatik: Çalışıyor';
+    } else if (status.last_result === 'success') {
+        badge.classList.add('bg-success');
+        badge.textContent = 'Otomatik: Beklemede';
+    } else if (status.last_result === 'failed') {
+        badge.classList.add('bg-danger');
+        badge.textContent = 'Otomatik: Hata';
+    } else {
+        badge.classList.add('bg-secondary');
+        badge.textContent = 'Otomatik: Beklemede';
+    }
+
+    text.textContent = status.last_message || '-';
+}
+
+function otomatikDurumYenile() {
+    fetch('/api/scheduler-durum')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (!data || !data.success) return;
+            otomatikDurumYaz(data.status || {});
+        })
+        .catch(() => {});
 }
 
 function satisModaliniGoster() {
@@ -2784,6 +2829,8 @@ function initializeRealTimeFiltering() {
 // Additional error handling for better debugging
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🔧 DOM fully loaded, all systems ready');
+    otomatikDurumYenile();
+    setInterval(otomatikDurumYenile, 10000);
 
     // Check for any undefined functions that might be called
     window.addEventListener('error', function(e) {

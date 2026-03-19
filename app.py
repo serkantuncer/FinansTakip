@@ -4,6 +4,8 @@ import sys
 import shutil
 import logging
 import time
+import atexit
+import threading
 from collections import defaultdict
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, make_response
 from flask_sqlalchemy import SQLAlchemy
@@ -31,10 +33,16 @@ import re
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 from flask_wtf.csrf import CSRFProtect
+from apscheduler.schedulers.background import BackgroundScheduler
 
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+_log_env = os.environ.get("FLASK_ENV", "").lower()
+_log_level = logging.DEBUG if _log_env != "production" else logging.WARNING
+logging.basicConfig(
+    level=_log_level,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s'
+)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 # .env dosyasını yükle
@@ -55,6 +63,27 @@ def http_session_olustur():
 
 
 http_session = http_session_olustur()
+scheduler = None
+scheduler_atexit_registered = False
+scheduler_job_lock = threading.Lock()
+
+DEFAULT_SCHEDULER_SETTINGS = {
+    'enabled': True,
+    'interval_minutes': 15,
+    'run_on_startup': False,
+    'home_live_refresh_enabled': True
+}
+DEFAULT_SCHEDULER_STATUS = {
+    'running': False,
+    'last_start': None,
+    'last_end': None,
+    'last_result': 'never',
+    'last_message': 'Henüz çalışmadı.',
+    'last_duration_seconds': None,
+    'last_updated_assets': 0,
+    'last_updated_records': 0,
+    'last_error': None
+}
 
 def resource_path(relative_path):
     """PyInstaller paketindeki dosyaların yolunu bulur."""
@@ -100,7 +129,7 @@ def get_writable_db_path():
         return os.path.abspath(db_path)
 
 app = Flask(__name__)
-flask_env = os.environ.get("FLASK_ENV", "").lower()
+flask_env = _log_env
 secret = os.environ.get("SESSION_SECRET")
 if not secret:
     if flask_env == "production":
@@ -137,6 +166,91 @@ login_manager.login_message_category = 'info'
 from auth import auth_bp
 app.register_blueprint(auth_bp)
 
+
+def scheduler_settings_path():
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '', 1)
+        base_dir = os.path.dirname(db_path)
+        if base_dir:
+            return os.path.join(base_dir, 'scheduler_settings.json')
+    return os.path.join(app.instance_path, 'scheduler_settings.json')
+
+
+def load_scheduler_settings():
+    ayarlar = DEFAULT_SCHEDULER_SETTINGS.copy()
+    path = scheduler_settings_path()
+    try:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                ayarlar.update({
+                    'enabled': bool(data.get('enabled', ayarlar['enabled'])),
+                    'interval_minutes': int(data.get('interval_minutes', ayarlar['interval_minutes'])),
+                    'run_on_startup': bool(data.get('run_on_startup', ayarlar['run_on_startup'])),
+                    'home_live_refresh_enabled': bool(data.get('home_live_refresh_enabled', ayarlar['home_live_refresh_enabled']))
+                })
+    except Exception as e:
+        app.logger.warning(f"Scheduler ayarlari okunamadi, varsayilanlar kullanilacak: {e}")
+
+    ayarlar['interval_minutes'] = max(1, min(720, int(ayarlar['interval_minutes'])))
+    return ayarlar
+
+
+def save_scheduler_settings(settings):
+    path = scheduler_settings_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temiz = {
+        'enabled': bool(settings.get('enabled', True)),
+        'interval_minutes': max(1, min(720, int(settings.get('interval_minutes', 15)))),
+        'run_on_startup': bool(settings.get('run_on_startup', False)),
+        'home_live_refresh_enabled': bool(settings.get('home_live_refresh_enabled', True))
+    }
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(temiz, f, ensure_ascii=False, indent=2)
+    return temiz
+
+
+def scheduler_status_path():
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.replace('sqlite:///', '', 1)
+        base_dir = os.path.dirname(db_path)
+        if base_dir:
+            return os.path.join(base_dir, 'scheduler_status.json')
+    return os.path.join(app.instance_path, 'scheduler_status.json')
+
+
+def load_scheduler_status():
+    durum = DEFAULT_SCHEDULER_STATUS.copy()
+    path = scheduler_status_path()
+    try:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                durum.update(data)
+    except Exception as e:
+        app.logger.warning(f"Scheduler durum dosyasi okunamadi: {e}")
+    return durum
+
+
+def save_scheduler_status(status):
+    path = scheduler_status_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temiz = DEFAULT_SCHEDULER_STATUS.copy()
+    temiz.update(status or {})
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(temiz, f, ensure_ascii=False, indent=2)
+    return temiz
+
+
+def update_scheduler_status(**kwargs):
+    durum = load_scheduler_status()
+    durum.update(kwargs)
+    return save_scheduler_status(durum)
+
 @login_manager.user_loader
 def load_user(user_id):
     try:
@@ -147,6 +261,20 @@ def load_user(user_id):
     except Exception as e:
         app.logger.error(f"User loading error: {e}")
         return None
+
+
+@app.context_processor
+def inject_global_scheduler_settings():
+    try:
+        return {
+            'scheduler_settings': load_scheduler_settings(),
+            'scheduler_status': load_scheduler_status()
+        }
+    except Exception:
+        return {
+            'scheduler_settings': DEFAULT_SCHEDULER_SETTINGS,
+            'scheduler_status': DEFAULT_SCHEDULER_STATUS
+        }
 
 def init_database():
     """Veritabanını başlatır - tabloları oluşturur."""
@@ -244,26 +372,10 @@ def migrate_existing_data():
         orphaned_investments = Yatirim.query.filter_by(user_id=None).all()
         
         if orphaned_investments:
-            app.logger.warning(f"Kullanıcısız {len(orphaned_investments)} yatırım kaydı bulundu. Varsayılan kullanıcıya atanıyor...")
-            
-            # Create a default user if none exists
-            default_user = User.query.filter_by(username='admin').first()
-            if not default_user:
-                default_user = User(
-                    username='admin',
-                    email='admin@example.com',
-                    password_hash=generate_password_hash('admin123')
-                )
-                db.session.add(default_user)
-                db.session.commit()
-                app.logger.info("Varsayılan admin kullanıcısı oluşturuldu (admin/admin123)")
-            
-            # Assign orphaned investments to default user
-            for investment in orphaned_investments:
-                investment.user_id = default_user.id
-            
-            db.session.commit()
-            app.logger.info(f"{len(orphaned_investments)} yatırım kaydı admin kullanıcısına atandı.")
+            app.logger.warning(
+                f"{len(orphaned_investments)} adet kullanıcısız yatırım kaydı bulundu. "
+                "Lütfen veritabanını manuel olarak düzeltin."
+            )
             
     except Exception as e:
         app.logger.error(f"Veri taşıma hatası: {e}")
@@ -271,6 +383,7 @@ def migrate_existing_data():
 # Fiyat verisi için basit TTL cache
 _fiyat_cache = {}  # {cache_key: (veri, timestamp)}
 CACHE_TTL = 900  # 15 dakika
+MAX_CACHE_SIZE = 500
 _bist_ssl_fallback_warned_symbols = set()
 _cache_hit_logged_keys = set()
 ALTIN_VERBOSE_DEBUG = os.environ.get("ALTIN_VERBOSE_DEBUG", "0") == "1"
@@ -304,6 +417,9 @@ def cache_den_al(varlik_tipi, kod):
 def cache_kaydet(varlik_tipi, kod, veri):
     if not veri:
         return
+    if len(_fiyat_cache) >= MAX_CACHE_SIZE:
+        oldest_key = min(_fiyat_cache, key=lambda k: _fiyat_cache[k][1])
+        _fiyat_cache.pop(oldest_key, None)
     _fiyat_cache[_cache_key(varlik_tipi, kod)] = (veri, time.time())
 
 
@@ -612,9 +728,15 @@ def stopaj_orani_donem_cakisiyor(fon_grubu, donem_baslangic, donem_bitis=None, e
     """
     Aynı fon_grubu + elde_tutma_gun kombinasyonu için dönem çakışmasını kontrol eder.
     """
+    elde_tutma_kosulu = (
+        StopajOrani.elde_tutma_gun == elde_tutma_gun
+        if elde_tutma_gun is not None
+        else StopajOrani.elde_tutma_gun.is_(None)
+    )
+
     adaylar = StopajOrani.query.filter(
         StopajOrani.fon_grubu == fon_grubu,
-        StopajOrani.elde_tutma_gun.is_(elde_tutma_gun) if elde_tutma_gun is None else StopajOrani.elde_tutma_gun == elde_tutma_gun
+        elde_tutma_kosulu
     ).all()
 
     yeni_bitis = donem_bitis or date.max
@@ -937,7 +1059,6 @@ def bist_hisse_verisi_cek(hisse_kodu):
         if hisse_kodu_upper not in _bist_ssl_fallback_warned_symbols:
             app.logger.warning(f"BIST SSL doğrulama hatası, development fallback kullanılacak: {ssl_err}")
             _bist_ssl_fallback_warned_symbols.add(hisse_kodu_upper)
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         try:
             response = http_session.get(api_url, headers=headers, timeout=15, verify=False)
             response.raise_for_status()
@@ -1264,6 +1385,161 @@ def fiyat_verisi_cek_by_tip_kod(tip, kod):
         return False, None
 
 
+def otomatik_fiyat_guncelle():
+    """Her 15 dakikada bir tum aktif yatirimlarin fiyatlarini gunceller."""
+    if not scheduler_job_lock.acquire(blocking=False):
+        update_scheduler_status(
+            running=True,
+            last_result='running',
+            last_message='Otomatik guncelleme zaten calisiyor.'
+        )
+        app.logger.info("Otomatik fiyat guncelleme atlandi: onceki calisma hala devam ediyor.")
+        return
+
+    baslangic = datetime.now()
+    with app.app_context():
+        try:
+            update_scheduler_status(
+                running=True,
+                last_start=baslangic.isoformat(),
+                last_result='running',
+                last_message='Otomatik guncelleme basladi.',
+                last_error=None
+            )
+
+            aktif_yatirimlar = Yatirim.query.filter_by(durum='aktif').all()
+            gruplar = {}
+            guncellenen_varlik = 0
+            guncellenen_kayit = 0
+
+            for y in aktif_yatirimlar:
+                key = f"{y.tip}:{(y.kod or '').upper()}"
+                if key not in gruplar:
+                    gruplar[key] = {
+                        'tip': y.tip,
+                        'kod': (y.kod or '').upper(),
+                        'yatirimlar': []
+                    }
+                gruplar[key]['yatirimlar'].append(y)
+
+            for grup in gruplar.values():
+                basarili, veri = fiyat_verisi_cek_by_tip_kod(grup['tip'], grup['kod'])
+                if not basarili or not veri:
+                    continue
+                guncellenen_varlik += 1
+
+                for y in grup['yatirimlar']:
+                    y.guncel_fiyat = veri['guncel_fiyat']
+                    y.son_guncelleme = veri['tarih']
+                    guncellenen_kayit += 1
+
+                    if y.tip in ['altin', 'doviz']:
+                        if veri.get('alis_fiyat') is not None:
+                            y.guncel_alis_fiyat = veri['alis_fiyat']
+                        if veri.get('satis_fiyat') is not None:
+                            y.guncel_satis_fiyat = veri['satis_fiyat']
+
+                    fiyat_gecmisi = FiyatGecmisi(
+                        yatirim_id=y.id,
+                        tarih=veri['tarih'],
+                        fiyat=veri['guncel_fiyat'],
+                        user_id=y.user_id
+                    )
+                    db.session.add(fiyat_gecmisi)
+
+            db.session.commit()
+            bitis = datetime.now()
+            sure = round((bitis - baslangic).total_seconds(), 2)
+            update_scheduler_status(
+                running=False,
+                last_end=bitis.isoformat(),
+                last_result='success',
+                last_message=f"Guncelleme tamamlandi: {guncellenen_varlik} varlik, {guncellenen_kayit} kayit.",
+                last_duration_seconds=sure,
+                last_updated_assets=guncellenen_varlik,
+                last_updated_records=guncellenen_kayit,
+                last_error=None
+            )
+            app.logger.info(f"Otomatik fiyat guncelleme tamamlandi: {len(gruplar)} varlik")
+        except Exception as e:
+            db.session.rollback()
+            bitis = datetime.now()
+            sure = round((bitis - baslangic).total_seconds(), 2)
+            update_scheduler_status(
+                running=False,
+                last_end=bitis.isoformat(),
+                last_result='failed',
+                last_message='Otomatik guncelleme hata ile sonlandi.',
+                last_duration_seconds=sure,
+                last_error=str(e)
+            )
+            app.logger.error(f"Otomatik fiyat guncelleme hatasi: {e}", exc_info=True)
+        finally:
+            scheduler_job_lock.release()
+
+
+def scheduler_baslat():
+    """APScheduler'i ayarlara gore baslatir/yeniden baslatir."""
+    global scheduler, scheduler_atexit_registered
+
+    scheduler_enabled = os.environ.get('SCHEDULER_ENABLED', '1').lower() in ('1', 'true', 'yes')
+    if not scheduler_enabled:
+        app.logger.info("Scheduler devre disi (SCHEDULER_ENABLED=0).")
+        if scheduler:
+            scheduler.shutdown(wait=False)
+            scheduler = None
+            app.config['SCHEDULER_RUNNING'] = False
+        update_scheduler_status(
+            running=False,
+            last_result='disabled',
+            last_message='Scheduler ortam ayari ile devre disi (SCHEDULER_ENABLED=0).'
+        )
+        return
+
+    ayarlar = load_scheduler_settings()
+    interval = ayarlar['interval_minutes']
+
+    if not ayarlar['enabled']:
+        if scheduler:
+            scheduler.shutdown(wait=False)
+            scheduler = None
+            app.config['SCHEDULER_RUNNING'] = False
+        app.logger.info("Scheduler ayarlardan devre disi birakildi.")
+        update_scheduler_status(
+            running=False,
+            last_result='disabled',
+            last_message='Scheduler ayarlardan devre disi birakildi.'
+        )
+        return
+
+    if scheduler:
+        scheduler.shutdown(wait=False)
+        scheduler = None
+        app.config['SCHEDULER_RUNNING'] = False
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        otomatik_fiyat_guncelle,
+        'interval',
+        minutes=interval,
+        id='fiyat_guncelle',
+        replace_existing=True
+    )
+    scheduler.start()
+    app.config['SCHEDULER_RUNNING'] = True
+    app.logger.info(f"Scheduler baslatildi: fiyat_guncelle ({interval} dk)")
+
+    if not scheduler_atexit_registered:
+        atexit.register(lambda: scheduler and scheduler.shutdown(wait=False))
+        scheduler_atexit_registered = True
+
+    if ayarlar.get('run_on_startup'):
+        try:
+            otomatik_fiyat_guncelle()
+        except Exception as e:
+            app.logger.warning(f"Acilista ilk fiyat guncellemesi basarisiz: {e}")
+
+
 def hesapla_portfoy_ozeti(yatirimlar):
     """Verilen yatırım listesi için portföy özet istatistiklerini hesaplar."""
     toplam_yatirim = Decimal('0')
@@ -1563,6 +1839,7 @@ def portfoy_gecmis_grafigi(user_id, gun_sayisi=30):
             FiyatGecmisi.tarih >= baslangic
         )
         .order_by(FiyatGecmisi.tarih.asc())
+        .limit(5000)
         .all()
     )
 
@@ -1591,7 +1868,10 @@ def portfoy_gecmis_grafigi(user_id, gun_sayisi=30):
 @login_required
 def index():
     # Kullanıcının yatırımlarını getir
-    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).order_by(Yatirim.alis_tarihi.desc()).all()
+    yatirimlar = Yatirim.query.filter_by(
+        user_id=current_user.id,
+        durum='aktif'
+    ).order_by(Yatirim.alis_tarihi.desc()).all()
 
     # Performans grafik dönem seçimi
     period_map = {
@@ -1835,7 +2115,7 @@ def yatirimlar():
     tip_filter = request.args.get('tip', '')
     kategori_filter = request.args.get('kategori', '')
     
-    query = Yatirim.query.filter_by(user_id=current_user.id)
+    query = Yatirim.query.filter_by(user_id=current_user.id, durum='aktif')
     
     if search:
         query = query.filter(
@@ -1855,6 +2135,7 @@ def yatirimlar():
     # Kategoriler listesi
     kategoriler = db.session.query(Yatirim.kategori).filter(
         Yatirim.user_id == current_user.id,
+        Yatirim.durum == 'aktif',
         Yatirim.kategori.isnot(None)
     ).distinct().all()
     kategoriler = [k[0] for k in kategoriler]
@@ -1880,8 +2161,26 @@ def yatirim_ekle():
             alis_tarihi = datetime.strptime(request.form['alis_tarihi'], '%Y-%m-%d')
             alis_fiyati = Decimal(request.form['alis_fiyati'].replace(',', '.'))
             miktar = Decimal(request.form['miktar'].replace(',', '.'))
+            alis_komisyon_str = request.form.get('alis_komisyon', '0')
+            alis_komisyon = Decimal(alis_komisyon_str.replace(',', '.')) if alis_komisyon_str else Decimal('0')
             notlar = request.form.get('notlar', '')
             kategori = request.form.get('kategori', '')
+
+            if alis_fiyati <= 0:
+                flash('Alış fiyatı sıfırdan büyük olmalıdır.', 'danger')
+                return redirect(url_for('yatirimlar'))
+
+            if miktar <= 0:
+                flash('Miktar sıfırdan büyük olmalıdır.', 'danger')
+                return redirect(url_for('yatirimlar'))
+
+            if alis_komisyon < 0:
+                flash('Alış komisyonu negatif olamaz.', 'danger')
+                return redirect(url_for('yatirimlar'))
+
+            if alis_tarihi.date() > datetime.now().date():
+                flash('Alış tarihi bugünden ileri olamaz.', 'warning')
+                return redirect(url_for('yatirimlar'))
             
             # Duplicate check removed - allow multiple entries of same investment code
             
@@ -1893,6 +2192,7 @@ def yatirim_ekle():
                 guncel_fiyat=alis_fiyati,
                 son_guncelleme=datetime.now(),
                 miktar=miktar,
+                alis_komisyon=alis_komisyon,
                 notlar=notlar,
                 kategori=kategori,
                 user_id=current_user.id
@@ -1916,20 +2216,19 @@ def yatirim_ekle():
             db.session.add(yatirim)
             db.session.commit()
             
-            # İlk eklemede manuel fiyat ile kayıt tamamlanır.
-            # Altın kaynağı timeout olursa ekleme akışını bloklamamak için
-            # altın tipinde anlık fiyat çekimi atlanır.
-            if tip != 'altin':
+            # İlk eklemede anlik fiyat çekmeyi dener.
+            # Hata olursa manuel alis fiyatiyla kayit devam eder.
+            try:
                 basarili, mesaj = fiyat_guncelle(yatirim.id)
                 if not basarili:
                     app.logger.warning(
                         f"İlk fiyat güncelleme başarısız ({tip}:{kod}): {mesaj}. "
                         "Manuel alış fiyatı ile kayda devam edildi."
                     )
-            else:
-                app.logger.info(
-                    f"Altın yatırımı ({kod}) eklenirken başlangıç fiyatı manuel alış fiyatından alındı. "
-                    "Dış fiyat çekimi atlandı."
+            except Exception as e:
+                app.logger.warning(
+                    f"İlk fiyat çekme hatası ({tip}:{kod}): {e}. "
+                    "Manuel alış fiyatı ile kayda devam edildi."
                 )
 
             if tip == 'fon':
@@ -2427,6 +2726,14 @@ def satis_yap(yatirim_id):
         satis_modu = str(request.form.get('satis_modu', 'grup')).lower()
         fifo_kapsam = 'kalem' if satis_modu == 'kalem' else 'grup'
 
+        if satis_tarihi.date() < yatirim.alis_tarihi.date():
+            flash(
+                f'Satış tarihi ({satis_tarihi.strftime("%d.%m.%Y")}), '
+                f'alış tarihinden ({yatirim.alis_tarihi.strftime("%d.%m.%Y")}) önce olamaz.',
+                'danger'
+            )
+            return redirect(url_for('yatirimlar'))
+
         basarili, sonuc = satis_kaydet(
             yatirim=yatirim,
             satilan_miktar=satilan_miktar,
@@ -2683,6 +2990,61 @@ def my_follows():
         .order_by(PortfoyTakip.created_at.desc()).all()
     
     return render_template('my_follows.html', takip_edilenler=takip_edilenler)
+
+
+@app.route('/ayarlar/otomatik-fiyat', methods=['POST'])
+@login_required
+def otomatik_fiyat_ayarlari_guncelle():
+    try:
+        enabled = request.form.get('scheduler_enabled') == 'on'
+        run_on_startup = request.form.get('scheduler_run_on_startup') == 'on'
+        home_live_refresh_enabled = request.form.get('home_live_refresh_enabled') == 'on'
+        interval_raw = (request.form.get('scheduler_interval_minutes') or '').strip()
+        if not interval_raw:
+            interval_raw = '15'
+
+        # Locale kaynaklı "15,0" veya "15.0" gibi değerleri de kabul et.
+        interval_norm = interval_raw.replace(',', '.')
+        interval_float = float(interval_norm)
+        if interval_float != int(interval_float):
+            raise ValueError("Interval must be integer minute")
+        interval = int(interval_float)
+
+        if interval < 1 or interval > 720:
+            flash('Otomatik güncelleme süresi 1 ile 720 dakika arasında olmalıdır.', 'danger')
+            return redirect(url_for('auth.profile'))
+
+        yeni_ayarlar = save_scheduler_settings({
+            'enabled': enabled,
+            'interval_minutes': interval,
+            'run_on_startup': run_on_startup,
+            'home_live_refresh_enabled': home_live_refresh_enabled
+        })
+
+        scheduler_baslat()
+        durum = 'aktif' if yeni_ayarlar['enabled'] else 'pasif'
+        flash(
+            f"Otomatik fiyat güncelleme ayarları kaydedildi. Durum: {durum}, Süre: {yeni_ayarlar['interval_minutes']} dk.",
+            'success'
+        )
+    except ValueError:
+        flash('Süre alanına geçerli bir sayı girin.', 'danger')
+    except Exception as e:
+        app.logger.error(f"Otomatik fiyat ayarlari guncellenemedi: {e}", exc_info=True)
+        flash('Ayarlar kaydedilirken hata oluştu.', 'danger')
+
+    return redirect(url_for('auth.profile'))
+
+
+@app.route('/api/scheduler-durum', methods=['GET'])
+@login_required
+def scheduler_durum_api():
+    return jsonify({
+        'success': True,
+        'scheduler_running': bool(app.config.get('SCHEDULER_RUNNING')),
+        'settings': load_scheduler_settings(),
+        'status': load_scheduler_status()
+    })
 
 
 def _portfolio_pdf_fallback_reportlab(user, yatirimlar, ozet):
@@ -3216,6 +3578,12 @@ def export_portfolio_pdf():
 
 # if __name__ == '__main__':
 #     app.run(host='0.0.0.0', port=5000, debug=True)
+
+# Uygulama açılışında arkaplan scheduler'ı başlat
+try:
+    scheduler_baslat()
+except Exception as e:
+    app.logger.error(f"Scheduler başlatma hatası: {e}", exc_info=True)
 
 
 

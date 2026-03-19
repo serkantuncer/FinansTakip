@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Paylaşılan Portföy{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h4 class="mb-1">{{ portfoy.baslik }}</h4>
+            <div class="text-muted mb-3">
+                Sahibi: {{ portfoy.paylasin.username if portfoy.paylasin else 'Bilinmiyor' }}
+            </div>
+            <p class="mb-3">{{ portfoy.aciklama or 'Açıklama yok.' }}</p>
+
+            <a href="{{ url_for('follow_portfolio', portfolio_id=portfoy.id) }}" class="btn btn-success">
+                Takip Et
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h6 class="mb-0">Portföy Yatırımları</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>Tip</th>
+                            <th>Kod</th>
+                            <th>Alış Tarihi</th>
+                            <th>Miktar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if yatirimlar %}
+                            {% for py in yatirimlar %}
+                            <tr>
+                                <td>{{ (py.tip or '-')|upper }}</td>
+                                <td>{{ py.kod }}</td>
+                                <td>{{ py.alis_tarihi.strftime('%d.%m.%Y') if py.alis_tarihi else '-' }}</td>
+                                <td>{{ py.miktar if py.miktar is not none else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    Bu portföyde henüz yatırım bulunmuyor.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

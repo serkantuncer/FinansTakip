@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Takip Ettiklerim{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">Takip Edilen Portföyler</h5>
+        </div>
+        <div class="card-body">
+            {% if takip_edilenler %}
+                <div class="list-group">
+                    {% for portfoy, takip in takip_edilenler %}
+                    <div class="list-group-item d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="fw-semibold">{{ portfoy.baslik }}</div>
+                            <small class="text-muted">
+                                {{ portfoy.aciklama[:120] ~ ('...' if portfoy.aciklama and portfoy.aciklama|length > 120 else '') if portfoy.aciklama else 'Açıklama yok.' }}
+                            </small>
+                            <div class="mt-1">
+                                <small class="text-muted">
+                                    Takip tarihi: {{ takip.created_at.strftime('%d.%m.%Y %H:%M') if takip.created_at else '-' }}
+                                </small>
+                            </div>
+                        </div>
+                        <a href="{{ url_for('view_shared_portfolio', portfolio_id=portfoy.id) }}" class="btn btn-outline-primary btn-sm">
+                            Görüntüle
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-muted">Henüz takip edilen bir portföy yok.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

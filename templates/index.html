@@ -3,7 +3,7 @@
 {% block title %}Ana Sayfa - Financial Portal{% endblock %}
 
 {% block content %}
-<div class="container">
+<div class="container" id="indexLiveContainer">
     <!-- Welcome Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -16,6 +16,13 @@
                     <a href="{{ url_for('yatirimlar') }}" class="btn btn-primary">
                         <i class="fas fa-chart-line me-2"></i>Yatırımları Yönet
                     </a>
+                    <small class="text-muted ms-2" id="indexCanliDurum">
+                        {% if scheduler_settings.home_live_refresh_enabled and scheduler_settings.enabled %}
+                        Canli guncelleme acik
+                        {% else %}
+                        Canli guncelleme kapali
+                        {% endif %}
+                    </small>
                 </div>
             </div>
         </div>
@@ -765,6 +772,82 @@
 
 {% block scripts %}
 <script>
+    const indexLiveRefreshEnabled = {{ (scheduler_settings.home_live_refresh_enabled and scheduler_settings.enabled)|tojson }};
+    const indexSchedulerIntervalMinutes = {{ scheduler_settings.interval_minutes|int }};
+    let indexSonSchedulerBitis = {{ scheduler_status.last_end|tojson }};
+
+    function indexCanliDurumYaz(mesaj) {
+        const el = document.getElementById('indexCanliDurum');
+        if (el && mesaj) {
+            el.textContent = mesaj;
+        }
+    }
+
+    async function indexIcerigiSessizYenile() {
+        const mevcut = document.getElementById('indexLiveContainer');
+        if (!mevcut) return;
+
+        const acikModaller = document.querySelectorAll('.modal.show');
+        if (acikModaller.length > 0) return;
+
+        const seciliKategori = document.getElementById('kategoriFilter')?.value || '';
+        const scrollY = window.scrollY;
+
+        const r = await fetch(window.location.pathname + window.location.search, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        if (!r.ok) return;
+
+        const html = await r.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const yeni = doc.getElementById('indexLiveContainer');
+        if (!yeni) return;
+
+        mevcut.innerHTML = yeni.innerHTML;
+
+        const yeniKategori = document.getElementById('kategoriFilter');
+        if (yeniKategori && seciliKategori) {
+            yeniKategori.value = seciliKategori;
+            if (typeof filterByCategory === 'function') {
+                filterByCategory();
+            }
+        }
+        window.scrollTo({ top: scrollY, behavior: 'auto' });
+    }
+
+    async function indexCanliKontrol() {
+        if (!indexLiveRefreshEnabled) return;
+
+        try {
+            const r = await fetch('/api/scheduler-durum');
+            if (!r.ok) return;
+            const data = await r.json();
+            if (!data || !data.success) return;
+
+            const status = data.status || {};
+            if (status.running) {
+                indexCanliDurumYaz('Canli guncelleme: veri toplanıyor');
+                return;
+            }
+
+            if (status.last_end && status.last_end !== indexSonSchedulerBitis) {
+                indexSonSchedulerBitis = status.last_end;
+                indexCanliDurumYaz('Canli guncelleme: yeni veriler uygulandi');
+                await indexIcerigiSessizYenile();
+                return;
+            }
+
+            if (status.last_result === 'failed') {
+                indexCanliDurumYaz('Canli guncelleme: son islem hatali');
+            } else {
+                indexCanliDurumYaz('Canli guncelleme acik');
+            }
+        } catch (_) {
+            // sessiz gec
+        }
+    }
+
     function filterByCategory() {
         const filter = document.getElementById('kategoriFilter').value;
 
@@ -1298,6 +1381,14 @@
 
     // Modal event listeners for z-index management
     document.addEventListener('DOMContentLoaded', function() {
+        if (indexLiveRefreshEnabled) {
+            indexCanliKontrol();
+            const checkMs = Math.max(30000, Math.min(300000, Math.floor((indexSchedulerIntervalMinutes * 60 * 1000) / 3)));
+            setInterval(indexCanliKontrol, checkMs);
+        } else {
+            indexCanliDurumYaz('Canli guncelleme kapali');
+        }
+
         const detailModal = document.getElementById('detailModal');
         const indexDetailModal = document.getElementById('indexDetailModal');
 
