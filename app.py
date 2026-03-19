@@ -25,6 +25,7 @@ from decimal import Decimal, InvalidOperation
 import plotly
 import plotly.express as px
 import plotly.graph_objects as go
+import unicodedata
 from functools import wraps
 import re
 import xml.etree.ElementTree as ET
@@ -1866,7 +1867,8 @@ def yatirimlar():
                          search=search,
                          tip_filter=tip_filter,
                          kategori_filter=kategori_filter,
-                         kategoriler=kategoriler)
+                         kategoriler=kategoriler,
+                         load_search_js=False)
 
 @app.route('/yatirim_ekle', methods=['GET', 'POST'])
 @login_required
@@ -2682,20 +2684,96 @@ def my_follows():
     
     return render_template('my_follows.html', takip_edilenler=takip_edilenler)
 
+
+def _portfolio_pdf_fallback_reportlab(user, yatirimlar, ozet):
+    """WeasyPrint başarısız olursa ReportLab ile temel bir PDF üret."""
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    def safe_text(value):
+        """ReportLab/Helvetica uyumu için güvenli ASCII metin üret."""
+        if value is None:
+            return "-"
+        text = str(value)
+        normalized = unicodedata.normalize("NFKD", text)
+        return normalized.encode("ascii", "ignore").decode("ascii") or "-"
+
+    font_name = "Helvetica"
+    font_candidates = [
+        resource_path(os.path.join("static", "fonts", "DejaVuSans.ttf")),
+        os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for font_path in font_candidates:
+        if font_path and os.path.exists(font_path):
+            try:
+                pdfmetrics.registerFont(TTFont("FallbackUnicode", font_path))
+                font_name = "FallbackUnicode"
+                break
+            except Exception:
+                pass
+
+    buffer = BytesIO()
+    page_size = landscape(A4)
+    c = canvas.Canvas(buffer, pagesize=page_size)
+    width, height = page_size
+
+    y = height - 36
+    line_h = 14
+
+    c.setFont(font_name, 14)
+    c.drawString(36, y, f"{safe_text(user.username)} - Portfoy Raporu")
+    y -= line_h * 1.5
+
+    c.setFont(font_name, 10)
+    c.drawString(36, y, f"Tarih: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    y -= line_h * 2
+
+    c.drawString(36, y, f"Toplam Yatirim: {ozet['toplam_yatirim']:,.2f} TL")
+    y -= line_h
+    c.drawString(36, y, f"Guncel Deger: {ozet['guncel_deger']:,.2f} TL")
+    y -= line_h
+    c.drawString(36, y, f"Kar/Zarar: {ozet['kar_zarar']:+,.2f} TL")
+    y -= line_h
+    c.drawString(36, y, f"Getiri: %{ozet['kar_zarar_yuzde']:+.2f}")
+    y -= line_h * 2
+
+    c.setFont(font_name, 9)
+    c.drawString(36, y, "Tip | Kod | Isim | Alis Fiyati | Miktar | Guncel Fiyat")
+    y -= line_h
+    c.line(36, y + 4, width - 36, y + 4)
+    y -= 6
+
+    for yatirim in yatirimlar:
+        if y < 40:
+            c.showPage()
+            c.setFont(font_name, 9)
+            y = height - 36
+        isim = safe_text((yatirim.isim or "-").replace("\n", " ").strip())
+        if len(isim) > 30:
+            isim = isim[:27] + "..."
+        guncel_fiyat = f"{yatirim.guncel_fiyat:,.3f}" if yatirim.guncel_fiyat else "-"
+        row = (
+            f"{safe_text((yatirim.tip or '-')).upper()} | {safe_text(yatirim.kod)} | {isim} | "
+            f"{yatirim.alis_fiyati:,.3f} | {yatirim.miktar:,.3f} | {guncel_fiyat}"
+        )
+        c.drawString(36, y, safe_text(row))
+        y -= line_h
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
 @app.route('/export_portfolio_pdf')
 @login_required
 def export_portfolio_pdf():
-    """Portföy özetini PDF olarak indir - Runtime import ile"""
+    """Portföy özetini PDF olarak indir (yalnızca WeasyPrint)."""
     try:
-        # Runtime'da WeasyPrint'i import et
-        try:
-            import weasyprint
-            from flask import make_response
-            import html
-        except ImportError as e:
-            app.logger.error(f"WeasyPrint import hatası: {e}")
-            flash('PDF oluşturma özelliği kullanılamıyor. WeasyPrint kurulmamış olabilir.', 'error')
-            return redirect(url_for('yatirimlar'))
+        import html
         
         # Kullanıcının yatırımlarını getir
         yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
@@ -3044,14 +3122,23 @@ def export_portfolio_pdf():
                     getiri_str = "-"
 
                 if yatirim.tip == 'fon':
-                    stopaj = stopaj_hesapla(yatirim)
-                    stopaj_oran_str = f"%{float(stopaj['stopaj_orani']):.2f}" if stopaj['stopaj_orani'] is not None else "Bilinmiyor"
-                    stopaj_tutar_str = f"₺{float(stopaj['stopaj_tutari']):,.2f}" if stopaj['stopaj_orani'] is not None else "-"
-                    net_kar_str = f"₺{float(stopaj['net_kar']):+,.2f}" if stopaj['stopaj_orani'] is not None else "-"
-                    if stopaj['stopaj_orani'] is not None:
-                        toplam_stopaj_yuku += float(stopaj['stopaj_tutari'])
-                        toplam_net_kar += float(stopaj['net_kar'])
-                        fon_stopajli_kayit_sayisi += 1
+                    try:
+                        stopaj = stopaj_hesapla(yatirim)
+                        stopaj_oran_str = f"%{float(stopaj['stopaj_orani']):.2f}" if stopaj['stopaj_orani'] is not None else "Bilinmiyor"
+                        stopaj_tutar_str = f"₺{float(stopaj['stopaj_tutari']):,.2f}" if stopaj['stopaj_orani'] is not None else "-"
+                        net_kar_str = f"₺{float(stopaj['net_kar']):+,.2f}" if stopaj['stopaj_orani'] is not None else "-"
+                        if stopaj['stopaj_orani'] is not None:
+                            toplam_stopaj_yuku += float(stopaj['stopaj_tutari'])
+                            toplam_net_kar += float(stopaj['net_kar'])
+                            fon_stopajli_kayit_sayisi += 1
+                    except Exception as stopaj_error:
+                        app.logger.error(
+                            f"PDF export stopaj hesaplama hatası (yatirim_id={yatirim.id}, kod={yatirim.kod}): {stopaj_error}",
+                            exc_info=True
+                        )
+                        stopaj_oran_str = "Hata"
+                        stopaj_tutar_str = "-"
+                        net_kar_str = "-"
                 
                 html_content += f"""
                     <tr>
@@ -3109,22 +3196,18 @@ def export_portfolio_pdf():
         </html>
         """
         
-        # PDF oluştur
-        try:
-            pdf_bytes = weasyprint.HTML(string=html_content).write_pdf()
-            
-            # Response oluştur
-            response = make_response(pdf_bytes)
-            filename = f"portfoy_raporu_{current_user.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
-            response.headers['Content-Type'] = 'application/pdf'
-            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
-            
-            return response
-            
-        except Exception as pdf_error:
-            app.logger.error(f"PDF oluşturma hatası: {pdf_error}", exc_info=True)
-            flash('PDF oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.', 'error')
-            return redirect(url_for('yatirimlar'))
+        # PDF oluştur (WeasyPrint)
+        import weasyprint
+        pdf_bytes = weasyprint.HTML(string=html_content).write_pdf()
+
+        response = make_response(pdf_bytes)
+        safe_username = re.sub(r"[^A-Za-z0-9._-]+", "_", (current_user.username or "kullanici")).strip("._-")
+        if not safe_username:
+            safe_username = "kullanici"
+        filename = f"portfoy_raporu_{safe_username}_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
         
     except Exception as e:
         app.logger.error(f"PDF export genel hatası: {str(e)}", exc_info=True)

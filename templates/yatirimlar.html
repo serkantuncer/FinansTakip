@@ -97,7 +97,7 @@
                                 </thead>
                                 <tbody>
                                     {% for grup in yatirim_gruplari %}
-                                    <tr data-kategori="{{ grup.kategori or '' }}">
+                                    <tr data-tip="{{ grup.tip }}" data-kategori="{{ grup.kategori or '' }}">
                                         <td>
                                             <strong>{{ grup.kod }}</strong>
                                             {% if grup.kalem_sayisi > 1 %}
@@ -198,7 +198,7 @@
                     <!-- Mobile Card View -->
                     <div class="d-xl-none">
                         {% for grup in yatirim_gruplari %}
-                        <div class="card mb-3" data-kategori="{{ grup.kategori or '' }}">
+                        <div class="card mb-3" data-tip="{{ grup.tip }}" data-kategori="{{ grup.kategori or '' }}">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
@@ -2630,8 +2630,8 @@ function initializeRealTimeFiltering() {
 
     function applyFilters() {
         const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        const selectedTip = tipFilter ? tipFilter.value.toLowerCase() : '';
-        const selectedKategori = kategoriFilter ? kategoriFilter.value : '';
+        const selectedTip = tipFilter ? tipFilter.value.toLowerCase().trim() : '';
+        const selectedKategori = kategoriFilter ? kategoriFilter.value.toLowerCase().trim() : '';
 
         console.log('Applying filters:', { searchTerm, selectedTip, selectedKategori });
 
@@ -2646,9 +2646,8 @@ function initializeRealTimeFiltering() {
         // Filter desktop rows
         desktopRows.forEach(function(row, index) {
             const rowText = row.textContent.toLowerCase();
-            const tipCell = row.querySelector('td:nth-child(3)');
-            const tipText = tipCell ? tipCell.textContent.toLowerCase().trim() : '';
-            const kategoriAttr = row.getAttribute('data-kategori') || '';
+            const tipAttr = (row.getAttribute('data-tip') || '').toLowerCase().trim();
+            const kategoriAttr = (row.getAttribute('data-kategori') || '').toLowerCase().trim();
 
             let shouldShow = true;
             let hasMatchInDetails = false;
@@ -2660,7 +2659,7 @@ function initializeRealTimeFiltering() {
                 const kodCell = row.querySelector('td:first-child');
                 const isimCell = row.querySelector('td:nth-child(2)');
                 const kodText = kodCell ? kodCell.textContent.toLowerCase() : '';
-                const isimText = isimCell ? isimText.textContent.toLowerCase() : '';
+                const isimText = isimCell ? isimCell.textContent.toLowerCase() : '';
 
                 if (!kodText.includes(searchTerm) && 
                     !isimText.includes(searchTerm) && 
@@ -2672,16 +2671,14 @@ function initializeRealTimeFiltering() {
 
             // Apply tip filter
             if (selectedTip) {
-                if (!tipText.includes(selectedTip)) {
+                if (tipAttr !== selectedTip) {
                     shouldShow = false;
                 }
             }
 
             // Apply kategori filter
             if (selectedKategori) {
-                let categoryMatch = kategoriAttr.includes(selectedKategori);
-
-                if (!categoryMatch) {
+                if (kategoriAttr !== selectedKategori) {
                     shouldShow = false;
                 }
             }
@@ -2695,15 +2692,14 @@ function initializeRealTimeFiltering() {
         // Filter mobile cards
         mobileCards.forEach(function(card) {
             const cardText = card.textContent.toLowerCase();
-            const kategoriAttr = card.getAttribute('data-kategori') || '';
-            const tipBadge = card.querySelector('.badge');
-            const tipText = tipBadge ? tipBadge.textContent.toLowerCase().trim() : '';
+            const kategoriAttr = (card.getAttribute('data-kategori') || '').toLowerCase().trim();
+            const tipAttr = (card.getAttribute('data-tip') || '').toLowerCase().trim();
 
             // Get code and namefrom card
             const kodElement = card.querySelector('.card-title strong');
             const isimElement = card.querySelector('.text-muted');
             const kodText = kodElement ? kodElement.textContent.toLowerCase() : '';
-            const isimText = isimElement ? isimText.textContent.toLowerCase() : '';
+            const isimText = isimElement ? isimElement.textContent.toLowerCase() : '';
 
             let shouldShow = true;
             let hasMatchInDetails = false;
@@ -2722,16 +2718,14 @@ function initializeRealTimeFiltering() {
 
             // Apply tip filter
             if (selectedTip) {
-                if (!tipText.includes(selectedTip)) {
+                if (tipAttr !== selectedTip) {
                     shouldShow = false;
                 }
             }
 
             // Apply kategori filter
             if (selectedKategori) {
-                let categoryMatch = kategoriAttr.includes(selectedKategori);
-
-                if (!categoryMatch) {
+                if (kategoriAttr !== selectedKategori) {
                     shouldShow = false;
                 }
             }

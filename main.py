@@ -190,6 +190,27 @@ def is_linux():
 def run_gui(port, config):
     theme = config.get("theme", "darkly")
     app_win = ttk.Window(title="Finans Takip Sistemi", themename=theme, size=(420, 250))
+
+    # Uygulama pencere ikonunu platforma göre ayarla.
+    # EXE dosya ikonu spec ile gömülür, fakat pencere ikonu ayrıca set edilmelidir.
+    try:
+        if is_windows():
+            ico_path = os.path.join(bundle_dir, "icon.ico")
+            png_path = os.path.join(bundle_dir, "icon.png")
+            if os.path.exists(ico_path):
+                app_win.iconbitmap(ico_path)
+            elif os.path.exists(png_path):
+                app_icon = tk.PhotoImage(file=png_path)
+                app_win.iconphoto(True, app_icon)
+                app_win._app_icon_ref = app_icon  # GC koruması
+        elif is_linux():
+            png_path = os.path.join(bundle_dir, "icon.png")
+            if os.path.exists(png_path):
+                app_icon = tk.PhotoImage(file=png_path)
+                app_win.iconphoto(True, app_icon)
+                app_win._app_icon_ref = app_icon  # GC koruması
+    except Exception as e:
+        print(f"⚠️ Pencere ikonu ayarlanamadı: {e}")
     
     if is_macos():
         try:

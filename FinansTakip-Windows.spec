@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 
 project_root = Path(SPECPATH).resolve()
@@ -16,15 +17,41 @@ def pick_first_existing(*candidates):
 
 icon_path = pick_first_existing('icon.ico', 'icon.png')
 
+weasyprint_datas = []
+for package_name in ['weasyprint', 'tinycss2', 'cssselect2', 'pyphen', 'fontTools']:
+    weasyprint_datas.extend(collect_data_files(package_name, include_py_files=True))
+
+weasyprint_hiddenimports = []
+for package_name in ['weasyprint', 'tinycss2', 'cssselect2', 'pyphen', 'fontTools']:
+    weasyprint_hiddenimports.extend(collect_submodules(package_name))
+
+# WeasyPrint'in Windows'ta ihtiyaç duyduğu GTK/Cairo/Pango DLL'lerini paketle.
+extra_binaries = []
+extra_datas = []
+
+gtk_root = Path(r"C:\Program Files\GTK3-Runtime Win64")
+if gtk_root.exists():
+    extra_binaries.append((str(gtk_root / "bin" / "*.dll"), "gtk/bin"))
+    if (gtk_root / "etc").exists():
+        extra_datas.append((str(gtk_root / "etc"), "gtk/etc"))
+    if (gtk_root / "share").exists():
+        extra_datas.append((str(gtk_root / "share"), "gtk/share"))
+
+msys_root = Path(r"C:\msys64\mingw64")
+if msys_root.exists():
+    extra_binaries.append((str(msys_root / "bin" / "*.dll"), "msys64/mingw64/bin"))
+
 a = Analysis(
     ['main.py'],
     pathex=[str(project_root)],
-    binaries=[],
+    binaries=extra_binaries,
     datas=[
         ('templates', 'templates'),
         ('static', 'static'),
         ('instance', 'instance'),
-    ],
+        ('icon.png', '.'),
+        ('icon.ico', '.'),
+    ] + weasyprint_datas + extra_datas,
     hiddenimports=[
         'flask',
         'flask_login',
@@ -48,10 +75,17 @@ a = Analysis(
         'PIL.Image',
         'PIL.ImageTk',
         'psutil',
-    ],
+        'weasyprint',
+        'pydyf',
+        'tinyhtml5',
+        'tinycss2',
+        'cssselect2',
+        'pyphen',
+        'fontTools',
+    ] + weasyprint_hiddenimports,
     hookspath=['hooks'],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hooks/rthook_weasyprint_runtime.py'],
     excludes=[],
     noarchive=False,
     optimize=0,

@@ -1,0 +1,7 @@
+-r requirements.txt
+
+# Build / packaging
+pyinstaller==6.11.1
+
+# Optional legacy PDF fallback (currently not in active flow)
+reportlab==4.2.5

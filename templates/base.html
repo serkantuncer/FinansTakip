@@ -123,7 +123,9 @@
     
     <!-- Custom JS -->
     <script src="{{ url_for('static', filename='js/actions.js') }}"></script>
+    {% if load_search_js is not defined or load_search_js %}
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
+    {% endif %}
     <script src="{{ url_for('static', filename='js/truncate.js') }}"></script>
     
     {% block scripts %}{% endblock %}
