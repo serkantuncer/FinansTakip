@@ -13,16 +13,10 @@
                     Hoş geldiniz, {{ current_user.username }}!
                 </h1>
                 <div>
+                    <span id="indexCanliDurum" class="badge text-bg-secondary me-2">Canli guncelleme hazir</span>
                     <a href="{{ url_for('yatirimlar') }}" class="btn btn-primary">
                         <i class="fas fa-chart-line me-2"></i>Yatırımları Yönet
                     </a>
-                    <small class="text-muted ms-2" id="indexCanliDurum">
-                        {% if scheduler_settings.home_live_refresh_enabled and scheduler_settings.enabled %}
-                        Canli guncelleme acik
-                        {% else %}
-                        Canli guncelleme kapali
-                        {% endif %}
-                    </small>
                 </div>
             </div>
         </div>
@@ -681,6 +675,15 @@
     </div>
 </div>
 
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1095;">
+    <div id="indexLiveToast" class="toast align-items-center text-bg-dark border-0" role="alert" aria-live="polite" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="indexLiveToastBody">Veriler guncellendi</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+        </div>
+    </div>
+</div>
+
 <!-- Investment Detail Modal -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -767,6 +770,20 @@
 .modal-backdrop.backdrop-secondary.show {
     opacity: 0.3;
 }
+
+#indexCanliDurum.live-ok {
+    background-color: #198754 !important;
+    color: #fff;
+}
+
+.live-updated-flash {
+    animation: liveFlashPulse 1.4s ease-out;
+}
+
+@keyframes liveFlashPulse {
+    0% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.45); }
+    100% { box-shadow: 0 0 0 18px rgba(25, 135, 84, 0); }
+}
 </style>
 {% endblock %}
 
@@ -776,10 +793,38 @@
     const indexSchedulerIntervalMinutes = {{ scheduler_settings.interval_minutes|int }};
     let indexSonSchedulerBitis = {{ scheduler_status.last_end|tojson }};
 
+    function indexSaatNow() {
+        return new Date().toLocaleTimeString('tr-TR');
+    }
+
     function indexCanliDurumYaz(mesaj) {
         const el = document.getElementById('indexCanliDurum');
         if (el && mesaj) {
-            el.textContent = mesaj;
+            el.textContent = `${mesaj} • ${indexSaatNow()}`;
+        }
+    }
+
+    function indexGuncellemeGeriBildirimGoster() {
+        const cards = document.querySelectorAll('#indexLiveContainer .card');
+        cards.forEach((card) => {
+            card.classList.remove('live-updated-flash');
+            void card.offsetWidth;
+            card.classList.add('live-updated-flash');
+        });
+
+        const chip = document.getElementById('indexCanliDurum');
+        if (chip) {
+            chip.classList.add('live-ok');
+            setTimeout(() => chip.classList.remove('live-ok'), 2000);
+        }
+
+        const toastEl = document.getElementById('indexLiveToast');
+        const toastBody = document.getElementById('indexLiveToastBody');
+        if (toastBody) {
+            toastBody.textContent = `Veriler guncellendi • ${indexSaatNow()}`;
+        }
+        if (toastEl && window.bootstrap && bootstrap.Toast) {
+            bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 1800 }).show();
         }
     }
 
@@ -814,6 +859,7 @@
             }
         }
         window.scrollTo({ top: scrollY, behavior: 'auto' });
+        indexGuncellemeGeriBildirimGoster();
     }
 
     async function indexCanliKontrol() {
