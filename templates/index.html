@@ -12,8 +12,8 @@
                     <i class="fas fa-home me-2"></i>
                     Hoş geldiniz, {{ current_user.username }}!
                 </h1>
-                <div>
-                    <span id="indexCanliDurum" class="badge text-bg-secondary me-2">Canli guncelleme hazir</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span id="indexCanliDurum" class="badge text-bg-secondary">Canli guncelleme hazir</span>
                     <a href="{{ url_for('yatirimlar') }}" class="btn btn-primary">
                         <i class="fas fa-chart-line me-2"></i>Yatırımları Yönet
                     </a>
@@ -678,7 +678,7 @@
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1095;">
     <div id="indexLiveToast" class="toast align-items-center text-bg-dark border-0" role="alert" aria-live="polite" aria-atomic="true">
         <div class="d-flex">
-            <div class="toast-body" id="indexLiveToastBody">Veriler guncellendi</div>
+            <div class="toast-body" id="indexLiveToastBody">Veriler güncellendi</div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
         </div>
     </div>
@@ -792,6 +792,7 @@
     const indexLiveRefreshEnabled = {{ (scheduler_settings.home_live_refresh_enabled and scheduler_settings.enabled)|tojson }};
     const indexSchedulerIntervalMinutes = {{ scheduler_settings.interval_minutes|int }};
     let indexSonSchedulerBitis = {{ scheduler_status.last_end|tojson }};
+    let indexSonSessizYenileme = 0;
 
     function indexSaatNow() {
         return new Date().toLocaleTimeString('tr-TR');
@@ -808,6 +809,7 @@
         const cards = document.querySelectorAll('#indexLiveContainer .card');
         cards.forEach((card) => {
             card.classList.remove('live-updated-flash');
+            // reflow
             void card.offsetWidth;
             card.classList.add('live-updated-flash');
         });
@@ -821,11 +823,24 @@
         const toastEl = document.getElementById('indexLiveToast');
         const toastBody = document.getElementById('indexLiveToastBody');
         if (toastBody) {
-            toastBody.textContent = `Veriler guncellendi • ${indexSaatNow()}`;
+            toastBody.textContent = `Veriler güncellendi • ${indexSaatNow()}`;
         }
         if (toastEl && window.bootstrap && bootstrap.Toast) {
             bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 1800 }).show();
         }
+    }
+
+    function indexContainerScriptleriniCalistir(containerEl) {
+        if (!containerEl) return;
+        const scripts = containerEl.querySelectorAll('script');
+        scripts.forEach((oldScript) => {
+            const newScript = document.createElement('script');
+            for (const attr of oldScript.attributes) {
+                newScript.setAttribute(attr.name, attr.value);
+            }
+            newScript.text = oldScript.textContent || '';
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
     }
 
     async function indexIcerigiSessizYenile() {
@@ -850,6 +865,7 @@
         if (!yeni) return;
 
         mevcut.innerHTML = yeni.innerHTML;
+        indexContainerScriptleriniCalistir(mevcut);
 
         const yeniKategori = document.getElementById('kategoriFilter');
         if (yeniKategori && seciliKategori) {
@@ -881,6 +897,17 @@
                 indexSonSchedulerBitis = status.last_end;
                 indexCanliDurumYaz('Canli guncelleme: yeni veriler uygulandi');
                 await indexIcerigiSessizYenile();
+                indexSonSessizYenileme = Date.now();
+                return;
+            }
+
+            // Desktop'ta scheduler sonu tetiklenmese bile periyodik sessiz yenileme yap.
+            const fallbackMs = Math.max(45000, Math.min(300000, indexSchedulerIntervalMinutes * 60 * 1000));
+            const simdi = Date.now();
+            if (!indexSonSessizYenileme || (simdi - indexSonSessizYenileme) >= fallbackMs) {
+                indexCanliDurumYaz('Canli guncelleme: veri kontrol ediliyor');
+                await indexIcerigiSessizYenile();
+                indexSonSessizYenileme = simdi;
                 return;
             }
 
