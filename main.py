@@ -294,12 +294,9 @@ def run_gui(port, config):
 
     def on_minimize():
         """Minimize'a basıldığında davranış"""
-        if is_macos():
-            # macOS'ta normal minimize davranışını koru
-            return
-        elif tray_icon and config.get("enable_system_tray", True):
-            print("🔽 Sistem tepsisine gizleniyor")
-            app_win.withdraw()
+        # Minimize her platformda normal davranmalı (taskbar/dock).
+        # Sadece X kapanışında tepsiye gizleme yapılır.
+        return
 
     app_win.protocol("WM_DELETE_WINDOW", on_close)
     

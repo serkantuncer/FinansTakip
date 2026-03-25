@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, collect_dynamic_libs
 
 
 project_root = Path(SPECPATH).resolve()
@@ -25,6 +25,15 @@ weasyprint_hiddenimports = []
 for package_name in ['weasyprint', 'tinycss2', 'cssselect2', 'pyphen', 'fontTools']:
     weasyprint_hiddenimports.extend(collect_submodules(package_name))
 
+# Numpy C-extension/DLL dosyalarini one-file build'e acikca ekle.
+numpy_binaries = collect_dynamic_libs('numpy')
+# Pandas import zincirinde one-file icin gerekli numpy alt modulleri.
+numpy_hiddenimports = [
+    'numpy._core._exceptions',
+    'numpy._core._multiarray_umath',
+    'numpy._core._dtype_ctypes',
+]
+
 # WeasyPrint'in Windows'ta ihtiyaç duyduğu GTK/Cairo/Pango DLL'lerini paketle.
 extra_binaries = []
 extra_datas = []
@@ -44,7 +53,7 @@ if msys_root.exists():
 a = Analysis(
     ['main.py'],
     pathex=[str(project_root)],
-    binaries=extra_binaries,
+    binaries=extra_binaries + numpy_binaries,
     datas=[
         ('templates', 'templates'),
         ('static', 'static'),
@@ -82,7 +91,7 @@ a = Analysis(
         'cssselect2',
         'pyphen',
         'fontTools',
-    ] + weasyprint_hiddenimports,
+    ] + weasyprint_hiddenimports + numpy_hiddenimports,
     hookspath=['hooks'],
     hooksconfig={},
     runtime_hooks=['hooks/rthook_weasyprint_runtime.py'],
@@ -103,7 +112,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,

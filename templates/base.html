@@ -17,6 +17,31 @@
     
     <!-- Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        .scheduler-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.25rem 0.6rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            font-size: 0.78rem;
+            white-space: nowrap;
+        }
+
+        .scheduler-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-secondary { background-color: #6c757d; }
+        .dot-success { background-color: #20c997; }
+        .dot-warning { background-color: #ffc107; }
+        .dot-danger { background-color: #dc3545; }
+    </style>
     
     {% block head %}{% endblock %}
 </head>
@@ -91,7 +116,15 @@
                     </li>
                 </ul>
                 
-                <ul class="navbar-nav">
+                <ul class="navbar-nav align-items-lg-center">
+                    <li class="nav-item d-none d-lg-flex me-3">
+                        <div class="scheduler-chip" id="globalSchedulerChip">
+                            <span class="scheduler-dot dot-secondary" id="globalSchedulerDot"></span>
+                            <span id="globalSchedulerPrimary">Canli: -</span>
+                            <span class="text-muted">|</span>
+                            <span id="globalSchedulerSecondary">Otomatik: -</span>
+                        </div>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-user me-1"></i>{{ current_user.username }}
@@ -150,6 +183,56 @@
     <script src="{{ url_for('static', filename='js/search.js') }}"></script>
     {% endif %}
     <script src="{{ url_for('static', filename='js/truncate.js') }}"></script>
+    {% if current_user.is_authenticated %}
+    <script>
+    (function () {
+        function yazGlobalDurum(data) {
+            const dotEl = document.getElementById('globalSchedulerDot');
+            const primaryEl = document.getElementById('globalSchedulerPrimary');
+            const secondaryEl = document.getElementById('globalSchedulerSecondary');
+            if (!dotEl || !primaryEl || !secondaryEl) return;
+
+            const settings = (data && data.settings) || {};
+            const status = (data && data.status) || {};
+            const liveEnabled = Boolean(settings.enabled && settings.home_live_refresh_enabled);
+            const autoEnabled = Boolean(settings.enabled);
+
+            primaryEl.textContent = liveEnabled ? 'Canli: Acik' : 'Canli: Kapali';
+
+            let dotClass = 'dot-secondary';
+            if (status.running) {
+                secondaryEl.textContent = 'Otomatik: Calisiyor';
+                dotClass = 'dot-warning';
+            } else if (status.last_result === 'failed') {
+                secondaryEl.textContent = 'Otomatik: Hata';
+                dotClass = 'dot-danger';
+            } else if (autoEnabled) {
+                secondaryEl.textContent = 'Otomatik: Beklemede';
+                dotClass = 'dot-success';
+            } else {
+                secondaryEl.textContent = 'Otomatik: Kapali';
+            }
+
+            dotEl.className = 'scheduler-dot ' + dotClass;
+        }
+
+        async function globalDurumYenile() {
+            try {
+                const r = await fetch('/api/scheduler-durum');
+                if (!r.ok) return;
+                const data = await r.json();
+                if (!data || !data.success) return;
+                yazGlobalDurum(data);
+            } catch (_) {
+                // sessiz gec
+            }
+        }
+
+        globalDurumYenile();
+        setInterval(globalDurumYenile, 10000);
+    })();
+    </script>
+    {% endif %}
     
     {% block scripts %}{% endblock %}
 </body>

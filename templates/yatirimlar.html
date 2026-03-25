@@ -22,12 +22,29 @@
                             <i class="fas fa-sync me-2"></i>Fiyatları Güncelle
                         </button>
                     </form>
-                    <span id="otomatikDurumBadge"
-                          class="badge ms-2 {% if scheduler_status.running %}bg-warning text-dark{% elif scheduler_status.last_result == 'success' %}bg-success{% elif scheduler_status.last_result == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
-                        {% if scheduler_status.running %}Otomatik: Çalışıyor{% else %}Otomatik: Beklemede{% endif %}
-                    </span>
-                    <small class="text-muted ms-2" id="otomatikDurumText">{{ scheduler_status.last_message or '-' }}</small>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div id="yatirimDurumSatiri" class="small text-muted text-end">
+                <i class="fas fa-clock me-1"></i>Durum hazirlaniyor...
+            </div>
+        </div>
+    </div>
+
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+        <div id="schedulerToast" class="toast border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-success text-white">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong class="me-auto">Fiyat Güncelleme</strong>
+                <small id="schedulerToastTime">Şimdi</small>
+                <button type="button" class="btn-close btn-close-white ms-2 mb-1" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="schedulerToastBody">
+                Güncelleme tamamlandı.
             </div>
         </div>
     </div>
@@ -638,33 +655,77 @@ let aktifYatirimTip = null;
 let aktifGuncelFiyat = null;
 let aktifMevcut = null;
 let aktifSatisModu = 'grup';
+let sonOtomatikBitis = {{ scheduler_status.last_end|tojson }};
 
 function csrfTokenAl() {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.getAttribute('content') : '';
 }
 
-function otomatikDurumYaz(status) {
-    const badge = document.getElementById('otomatikDurumBadge');
-    const text = document.getElementById('otomatikDurumText');
-    if (!badge || !text) return;
+function schedulerZamanFormatla(rawDate) {
+    if (!rawDate) return '-';
+    try {
+        return new Date(rawDate).toLocaleString('tr-TR');
+    } catch (_) {
+        return rawDate;
+    }
+}
 
-    badge.className = 'badge ms-2';
-    if (status.running) {
-        badge.classList.add('bg-warning', 'text-dark');
-        badge.textContent = 'Otomatik: Çalışıyor';
-    } else if (status.last_result === 'success') {
-        badge.classList.add('bg-success');
-        badge.textContent = 'Otomatik: Beklemede';
+function schedulerToastGoster(mesaj) {
+    const toastEl = document.getElementById('schedulerToast');
+    const bodyEl = document.getElementById('schedulerToastBody');
+    const timeEl = document.getElementById('schedulerToastTime');
+    if (!toastEl || !bodyEl || !timeEl) return;
+    bodyEl.textContent = mesaj;
+    timeEl.textContent = new Date().toLocaleTimeString('tr-TR');
+    const toast = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 4500 });
+    toast.show();
+}
+
+function otomatikDurumYaz(status, settings) {
+    const satir = document.getElementById('yatirimDurumSatiri');
+    if (!satir) return;
+
+    const otomatikAcik = Boolean(settings && settings.enabled);
+    const sonMesaj = status.last_message || '-';
+    const sonBitis = schedulerZamanFormatla(status.last_end);
+    const varlik = status.last_updated_assets || 0;
+    const kayit = status.last_updated_records || 0;
+
+    let durumMetni = 'Beklemede';
+    let ikon = 'fa-pause-circle';
+    let renk = 'text-muted';
+
+    if (!otomatikAcik) {
+        durumMetni = 'Kapali';
+        ikon = 'fa-power-off';
+    } else if (status.running) {
+        durumMetni = 'Calisiyor';
+        ikon = 'fa-spinner fa-spin';
+        renk = 'text-warning';
     } else if (status.last_result === 'failed') {
-        badge.classList.add('bg-danger');
-        badge.textContent = 'Otomatik: Hata';
-    } else {
-        badge.classList.add('bg-secondary');
-        badge.textContent = 'Otomatik: Beklemede';
+        durumMetni = 'Hata';
+        ikon = 'fa-triangle-exclamation';
+        renk = 'text-danger';
+    } else if (status.last_result === 'success') {
+        durumMetni = 'Beklemede';
+        ikon = 'fa-check-circle';
+        renk = 'text-success';
     }
 
-    text.textContent = status.last_message || '-';
+    satir.className = `small text-end ${renk}`;
+    satir.innerHTML = `<i class="fas ${ikon} me-1"></i><strong>Otomatik:</strong> ${durumMetni} · <strong>Son:</strong> ${sonBitis} · <strong>Ozet:</strong> ${varlik} varlik / ${kayit} kayit`;
+
+    if (status.last_result === 'success' && status.last_end && status.last_end !== sonOtomatikBitis) {
+        sonOtomatikBitis = status.last_end;
+        schedulerToastGoster(`Guncelleme tamamlandi: ${varlik} varlik, ${kayit} kayit.`);
+    }
+
+    if (status.last_result === 'failed' && sonMesaj && sonMesaj !== '-') {
+        satir.title = sonMesaj;
+    } else {
+        satir.removeAttribute('title');
+    }
 }
 
 function otomatikDurumYenile() {
@@ -672,7 +733,7 @@ function otomatikDurumYenile() {
         .then(r => r.ok ? r.json() : null)
         .then(data => {
             if (!data || !data.success) return;
-            otomatikDurumYaz(data.status || {});
+            otomatikDurumYaz(data.status || {}, data.settings || {});
         })
         .catch(() => {});
 }
