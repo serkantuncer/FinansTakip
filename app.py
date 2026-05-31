@@ -423,6 +423,74 @@ def cache_kaydet(varlik_tipi, kod, veri):
     _fiyat_cache[_cache_key(varlik_tipi, kod)] = (veri, time.time())
 
 
+def _decimal_parse_et(deger):
+    if deger is None:
+        return None
+    text = str(deger).strip()
+    if not text:
+        return None
+    normalized = text.replace('TL', '').replace('₺', '').strip()
+    if ',' in normalized:
+        normalized = normalized.replace('.', '').replace(',', '.')
+    return Decimal(normalized)
+
+
+def tefas_yeni_api_fon_verisi_cek(fon_kodu):
+    """TEFAS 2026 JSON API ile fonun son fiyat bilgisini ceker."""
+    fon_kodu_upper = fon_kodu.upper()
+    api_url = "https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir"
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/124.0.0.0 Safari/537.36'
+        ),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://www.tefas.gov.tr/'
+    }
+    payload = {"fonKodu": fon_kodu_upper, "dil": "TR", "periyod": 1}
+
+    try:
+        response = http_session.post(api_url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        body = json.loads(response.content.decode('utf-8-sig'))
+        rows = body.get('resultList') if isinstance(body, dict) else None
+        if not rows:
+            app.logger.warning(f"TEFAS yeni API'den {fon_kodu_upper} icin veri donmedi.")
+            return None
+
+        latest_data = max(rows, key=lambda item: item.get('tarih') or '')
+        fiyat = _decimal_parse_et(latest_data.get('fiyat'))
+        if fiyat is None:
+            app.logger.warning(f"TEFAS yeni API fiyat bos dondu ({fon_kodu_upper}): {latest_data}")
+            return None
+
+        tarih_text = latest_data.get('tarih')
+        try:
+            veri_tarihi = datetime.strptime(tarih_text, '%Y-%m-%d') if tarih_text else datetime.now()
+        except (TypeError, ValueError):
+            veri_tarihi = datetime.now()
+
+        veri = {
+            'isim': latest_data.get('fonUnvan') or f"{fon_kodu_upper} Fonu",
+            'guncel_fiyat': fiyat,
+            'tarih': veri_tarihi
+        }
+        cache_kaydet('fon', fon_kodu_upper, veri)
+        app.logger.info(f"TEFAS yeni API verisi cekildi: {fon_kodu_upper} - {fiyat}")
+        return veri
+    except requests.exceptions.RequestException as e:
+        app.logger.warning(f"TEFAS yeni API istek hatasi ({fon_kodu_upper}): {e}")
+        return None
+    except (ValueError, InvalidOperation) as e:
+        app.logger.warning(f"TEFAS yeni API parse hatasi ({fon_kodu_upper}): {e}")
+        return None
+    except Exception as e:
+        app.logger.error(f"TEFAS yeni API genel hatasi ({fon_kodu_upper}): {e}", exc_info=True)
+        return None
+
+
 # Veri çekme fonksiyonları
 def tefas_fon_verisi_cek(fon_kodu):
     """TEFAŞ'tan fon verisi çeker - güncellenmiş versiyon."""
@@ -431,6 +499,10 @@ def tefas_fon_verisi_cek(fon_kodu):
     if cached_veri:
         _log_cache_hit_once("TEFAS", fon_kodu_upper)
         return cached_veri
+
+    yeni_api_verisi = tefas_yeni_api_fon_verisi_cek(fon_kodu_upper)
+    if yeni_api_verisi:
+        return yeni_api_verisi
 
     url = f"https://www.tefas.gov.tr/FonAnaliz.aspx?FonKod={fon_kodu_upper}"
     headers = {
@@ -513,7 +585,9 @@ def tefas_fon_verisi_cek(fon_kodu):
         
         try:
             # Önce binlik ayraçları kaldır, sonra virgülü noktaya çevir
-            fiyat = Decimal(fiyat_text.replace('.', '').replace(',', '.'))
+            fiyat = _decimal_parse_et(fiyat_text)
+            if fiyat is None:
+                raise InvalidOperation("Bos fiyat")
         except (InvalidOperation, ValueError):
             app.logger.error(f"TEFAŞ fiyatı ({fon_kodu_upper}) Decimal'e çevrilemedi: '{fiyat_text}'")
             return None
@@ -1000,6 +1074,10 @@ def tefas_alternatif_arama(fon_kodu):
     if cached_veri:
         _log_cache_hit_once("TEFAS", fon_kodu_upper)
         return cached_veri
+
+    yeni_api_verisi = tefas_yeni_api_fon_verisi_cek(fon_kodu_upper)
+    if yeni_api_verisi:
+        return yeni_api_verisi
 
     try:
         # TEFAS public API endpoint
@@ -2352,7 +2430,7 @@ def fiyat_guncelle_route(yatirim_id):
 @app.route('/toplu_fiyat_guncelle', methods=['POST'])
 @login_required
 def toplu_fiyat_guncelle():
-    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id).all()
+    yatirimlar = Yatirim.query.filter_by(user_id=current_user.id, durum='aktif').all()
 
     basarili_count = 0
     hata_count = 0
