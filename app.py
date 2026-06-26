@@ -1189,10 +1189,10 @@ def altin_verisi_cek(altin_turu_kodu):
 
     # Uygulama içi kod -> yeni servisteki Kod alanı
     altin_tipi_kod_map = {
-        'GA': 'GA',
-        'C': 'C',
-        'Y': 'Y',
-        'T': 'T',
+        'GA': 'PGA',
+        'C': 'PC',
+        'Y': 'PY',
+        'T': 'PT',
         'ONS': 'XAUUSD',
     }
 
